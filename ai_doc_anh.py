@@ -12,55 +12,15 @@ st.set_page_config(page_title="Hệ Thống Quản Trị F&B", layout="wide", pa
 
 st.markdown("""
 <style>
-    .stApp {
-        background-color: #FAFAFA;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    }
-    h1, h2, h3 {
-        color: #4A4036 !important; 
-        font-weight: 600 !important;
-    }
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        padding-bottom: 5px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        background-color: #F0EAE1;
-        border-radius: 8px 8px 0px 0px;
-        padding: 10px 24px;
-        color: #6B5E53;
-        font-weight: 500;
-        border: none;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #E2D4C6 !important;
-        color: #4A4036 !important;
-        font-weight: bold;
-        border-bottom: 3px solid #C4A484 !important;
-    }
-    div[data-testid="metric-container"] {
-        background-color: #FFFFFF;
-        border: 1px solid #EAEAEA;
-        padding: 15px;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-    }
-    .stButton>button {
-        background-color: #4A4036;
-        color: #FFFFFF;
-        border-radius: 6px;
-        border: none;
-        transition: all 0.3s;
-    }
-    .stButton>button:hover {
-        background-color: #6B5E53;
-        color: #FFFFFF;
-    }
-    .stDataFrame {
-        border-radius: 8px;
-        overflow: hidden;
-        border: 1px solid #EAEAEA;
-    }
+    .stApp { background-color: #FAFAFA; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    h1, h2, h3 { color: #4A4036 !important; font-weight: 600 !important; }
+    .stTabs [data-baseweb="tab-list"] { gap: 8px; padding-bottom: 5px; }
+    .stTabs [data-baseweb="tab"] { background-color: #F0EAE1; border-radius: 8px 8px 0px 0px; padding: 10px 24px; color: #6B5E53; font-weight: 500; border: none; }
+    .stTabs [aria-selected="true"] { background-color: #E2D4C6 !important; color: #4A4036 !important; font-weight: bold; border-bottom: 3px solid #C4A484 !important; }
+    div[data-testid="metric-container"] { background-color: #FFFFFF; border: 1px solid #EAEAEA; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+    .stButton>button { background-color: #4A4036; color: #FFFFFF; border-radius: 6px; border: none; transition: all 0.3s; }
+    .stButton>button:hover { background-color: #6B5E53; color: #FFFFFF; }
+    .stDataFrame { border-radius: 8px; overflow: hidden; border: 1px solid #EAEAEA; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -70,18 +30,14 @@ st.title("📊 Hệ Thống Bóc Tách & Phân Tích Dữ Liệu F&B")
 # HÀM HỖ TRỢ XỬ LÝ TIỀN TỆ & ĐỌC DỮ LIỆU
 # ==========================================
 def clean_money(val):
-    if pd.isna(val):
-        return 0
-    if isinstance(val, (int, float)):
-        return int(val)
+    if pd.isna(val): return 0
+    if isinstance(val, (int, float)): return int(val)
     val_str = str(val).strip()
-    try:
-        return int(float(val_str))
+    try: return int(float(val_str))
     except ValueError:
         val_str = val_str.split(',')[0]
         val_str = re.sub(r'[^\d]', '', val_str)
-        if val_str == '':
-            return 0
+        if val_str == '': return 0
         return int(val_str)
 
 @st.cache_data(ttl=600, show_spinner=False)
@@ -93,7 +49,7 @@ def doc_du_lieu_gg_sheet(link, ten_tab):
 tab1, tab2, tab3, tab4 = st.tabs(["📦 Xử Lý Tồn Kho", "📈 Phân Tích Bán Hàng Chi Tiết", "📋 Quản Lý Menu Gốc", "🧮 Phân Tích % Nguyên Liệu"])
 
 # ==========================================
-# TAB 1: XỬ LÝ TỒN KHO (TÍCH HỢP BỘ LỌC ĐA CHI NHÁNH & BIỂU ĐỒ)
+# TAB 1: XỬ LÝ TỒN KHO (CẢI TIẾN LỌC NHIỀU CHI NHÁNH & KHOẢNG NGÀY)
 # ==========================================
 with tab1:
     st.markdown("### 📦 Quản Lý Dữ Liệu Tồn Kho")
@@ -102,7 +58,7 @@ with tab1:
     loai_nguon_kho = st.radio("Nguồn cấp dữ liệu Tồn Kho:", 
                               options=["🔗 Liên kết Google Sheet (Dữ liệu nền AppSheet)", "📁 Tải file (Excel/CSV) thủ công"], horizontal=True)
     
-    df_kho = pd.DataFrame()
+    df_kho_goc = pd.DataFrame()
     
     if loai_nguon_kho == "🔗 Liên kết Google Sheet (Dữ liệu nền AppSheet)":
         col_link, col_tab, col_btn = st.columns([3, 1, 1])
@@ -118,14 +74,14 @@ with tab1:
             
         if link_appsheet:
             try:
-                df_kho = doc_du_lieu_gg_sheet(link_appsheet, tab_appsheet)
+                df_kho_goc = doc_du_lieu_gg_sheet(link_appsheet, tab_appsheet)
                 st.success(f"✅ Đã kết nối thành công với kho dữ liệu `{tab_appsheet}`!")
             except Exception as e:
                 st.error("❌ Không thể kết nối. Vui lòng kiểm tra lại link Google Sheet.")
                 
     else:
         if os.path.exists("temp_kho.csv"):
-            df_kho = pd.read_csv("temp_kho.csv")
+            df_kho_goc = pd.read_csv("temp_kho.csv")
             st.success("✅ Đã khôi phục dữ liệu Tồn Kho từ phiên làm việc trước.")
             if st.button("🗑️ Xóa dữ liệu cũ để tải file mới"):
                 os.remove("temp_kho.csv")
@@ -134,29 +90,37 @@ with tab1:
             file_kho = st.file_uploader("Tải file Tồn Kho lên đây", type=['xlsx', 'xls', 'csv'], key="kho")
             if file_kho is not None:
                 if file_kho.name.endswith('.csv'):
-                    df_kho = pd.read_csv(file_kho)
+                    df_kho_goc = pd.read_csv(file_kho)
                 else:
-                    df_kho = pd.read_excel(file_kho)
-                df_kho.to_csv("temp_kho.csv", index=False)
+                    df_kho_goc = pd.read_excel(file_kho)
+                df_kho_goc.to_csv("temp_kho.csv", index=False)
                 st.rerun()
 
-    if not df_kho.empty:
+    # --- TIẾN HÀNH XỬ LÝ NẾU CÓ DỮ LIỆU ---
+    if not df_kho_goc.empty:
+        df_kho = df_kho_goc.copy()
         st.write("---")
-        st.write("### 🎛️ Bộ Lọc Dữ Liệu Thông Minh")
+        st.write("### 🎛️ BỘ LỌC TÙY CHỈNH (CHI NHÁNH & THỜI GIAN)")
+        
+        # Nhận diện cột tự động để hỗ trợ lọc
+        cols = df_kho.columns.tolist()
+        
         col_f1, col_f2 = st.columns(2)
         
+        # 1. Bộ lọc Chi Nhánh (Chọn nhiều)
         with col_f1:
-            if "Chi nhánh" in df_kho.columns:
-                danh_sach_cn = df_kho["Chi nhánh"].dropna().unique().tolist()
-                # Nâng cấp thành Multiselect để chọn nhiều chi nhánh
+            cot_chi_nhanh = "Chi nhánh" if "Chi nhánh" in cols else ("Chi Nhánh" if "Chi Nhánh" in cols else None)
+            if cot_chi_nhanh:
+                danh_sach_cn = df_kho[cot_chi_nhanh].dropna().unique().tolist()
+                # Cho phép chọn nhiều chi nhánh (Mặc định chọn tất cả)
                 cn_chon = st.multiselect("🏢 Chọn Chi Nhánh Cần Phân Tích:", options=danh_sach_cn, default=danh_sach_cn)
                 if cn_chon:
-                    df_kho = df_kho[df_kho["Chi nhánh"].isin(cn_chon)]
+                    df_kho = df_kho[df_kho[cot_chi_nhanh].isin(cn_chon)]
             else:
-                st.info("Bảng không có cột 'Chi nhánh'")
+                st.info("Bảng không có cột định danh 'Chi nhánh'")
                 
+        # 2. Bộ lọc Thời gian (Khoảng ngày)
         with col_f2:
-            # Tự động tìm các cột chứa ngày tháng để làm bộ lọc thời gian
             date_cols = [c for c in df_kho.columns if 'ngày' in c.lower() or 'date' in c.lower() or 'thời gian' in c.lower()]
             if date_cols:
                 date_col = date_cols[0]
@@ -169,7 +133,6 @@ with tab1:
                 max_date = df_kho['_temp_date_obj'].max()
                 
                 if pd.notnull(min_date) and pd.notnull(max_date):
-                    # Tích hợp bộ chọn khoảng ngày
                     ngay_loc = st.date_input(f"🗓️ Lọc khoảng thời gian ({date_col}):", value=(min_date, max_date), min_value=min_date, max_value=max_date)
                     if isinstance(ngay_loc, tuple):
                         start_d = ngay_loc[0]
@@ -180,38 +143,39 @@ with tab1:
                     df_kho = df_kho[(df_kho['_temp_date_obj'] >= start_d) & (df_kho['_temp_date_obj'] <= end_d)]
                 df_kho = df_kho.drop(columns=['_temp_date', '_temp_date_obj'])
 
-        st.write("🔍 **Bản xem trước dữ liệu:**")
+        st.write("🔍 **Bản xem trước dữ liệu (Sau khi lọc):**")
         st.dataframe(df_kho.head(5), use_container_width=True)
         
+        # --- KHU VỰC TRÍCH XUẤT VÀ VẼ BIỂU ĐỒ ---
         st.write("---")
-        st.write("### 📈 Trích Xuất Báo Cáo & Vẽ Biểu Đồ Xu Hướng")
-        danh_sach_cot = df_kho.columns.tolist()
+        st.write("### 📈 TRÍCH XUẤT BÁO CÁO & VẼ BIỂU ĐỒ XU HƯỚNG")
+        danh_sach_cot_loc = df_kho.columns.tolist()
         
         c1, c2, c3 = st.columns(3)
         with c1:
-            idx_nhom = danh_sach_cot.index("Chi nhánh") if "Chi nhánh" in danh_sach_cot else 0
-            cot_nhom = st.selectbox("Cột Đối Tượng (Ví dụ: Chi nhánh):", options=danh_sach_cot, index=idx_nhom)
+            idx_nhom = danh_sach_cot_loc.index(cot_chi_nhanh) if cot_chi_nhanh in danh_sach_cot_loc else 0
+            cot_nhom = st.selectbox("Cột Đối Tượng (Ví dụ: Chi nhánh):", options=danh_sach_cot_loc, index=idx_nhom)
         with c2:
-            idx_ngay = danh_sach_cot.index("Ngày Kiểm") if "Ngày Kiểm" in danh_sach_cot else 0
-            cot_ngay = st.selectbox("Cột Trục X (Thời gian/Ngày):", options=danh_sach_cot, index=idx_ngay)
+            idx_ngay = danh_sach_cot_loc.index("Ngày Kiểm") if "Ngày Kiểm" in danh_sach_cot_loc else 0
+            cot_ngay = st.selectbox("Cột Trục X (Thời gian/Ngày):", options=danh_sach_cot_loc, index=idx_ngay)
         with c3:
-            idx_gt = danh_sach_cot.index("Tổng Giá Trị Tồn Kho") if "Tổng Giá Trị Tồn Kho" in danh_sach_cot else 0
-            cot_gt = st.selectbox("Cột Trục Y (Giá trị Tồn):", options=danh_sach_cot, index=idx_gt)
+            idx_gt = danh_sach_cot_loc.index("Tổng Giá Trị Tồn Kho") if "Tổng Giá Trị Tồn Kho" in danh_sach_cot_loc else 0
+            cot_gt = st.selectbox("Cột Trục Y (Giá trị Tồn):", options=danh_sach_cot_loc, index=idx_gt)
             
         if st.button("🚀 Xử Lý Dữ Liệu & Vẽ Biểu Đồ"):
             df_kq = df_kho[[cot_nhom, cot_ngay, cot_gt]].copy()
-            df_kq = df_kq.dropna(how='all')
+            df_kq = df_kq.dropna(how='any') # Xóa các dòng bị thiếu data
             
-            # Cạo sạch tiền tệ
+            # Xử lý làm sạch số liệu tiền tệ
             df_kq[cot_gt] = df_kq[cot_gt].apply(clean_money)
             
-            # Đảm bảo sắp xếp đúng theo ngày
+            # Sắp xếp đúng trình tự ngày tháng để biểu đồ không bị rối
             df_kq['_date_sort'] = pd.to_datetime(df_kq[cot_ngay], format='%d/%m/%Y', errors='coerce')
             if df_kq['_date_sort'].isna().all():
                 df_kq['_date_sort'] = pd.to_datetime(df_kq[cot_ngay], errors='coerce')
             df_kq = df_kq.sort_values('_date_sort')
             
-            # --- VẼ BIỂU ĐỒ ĐƯỜNG ---
+            # --- VẼ BIỂU ĐỒ ĐƯỜNG SO SÁNH ---
             st.markdown("#### 📊 Biểu Đồ Biến Thiên Giá Trị Tồn Kho")
             df_chart = df_kq.groupby([cot_ngay, cot_nhom])[cot_gt].sum().reset_index()
             
@@ -221,13 +185,20 @@ with tab1:
             df_chart = df_chart.sort_values('_date_sort')
             
             if not df_chart.empty:
+                # Chuyển đổi dữ liệu sang dạng ma trận để Streamlit vẽ nhiều đường
                 df_pivot = df_chart.pivot(index=cot_ngay, columns=cot_nhom, values=cot_gt).fillna(0)
+                # Sắp xếp lại index ngày tháng
+                df_pivot.index = pd.to_datetime(df_pivot.index, format='%d/%m/%Y', errors='ignore')
+                df_pivot = df_pivot.sort_index()
+                # Chuyển index lại thành chuỗi để hiển thị
+                df_pivot.index = df_pivot.index.strftime('%d/%m/%Y')
+                
                 st.line_chart(df_pivot)
             
-            # --- BẢNG BÁO Cáo ---
+            # --- BẢNG BÁO CÁO TỔNG HỢP ---
             st.markdown("#### 📋 Bảng Báo Cáo Chi Tiết")
             df_kq_hien_thi = df_kq.drop(columns=['_date_sort'])
-            df_kq_hien_thi[cot_gt] = df_kq_hien_thi[cot_gt].apply(lambda x: f"{x:,}")
+            df_kq_hien_thi[cot_gt] = df_kq_hien_thi[cot_gt].apply(lambda x: f"{x:,} đ")
             st.dataframe(df_kq_hien_thi, use_container_width=True)
 
 # ==========================================
