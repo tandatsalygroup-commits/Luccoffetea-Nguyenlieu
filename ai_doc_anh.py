@@ -169,10 +169,14 @@ with tab1:
             
             if not df_chart.empty:
                 df_pivot = df_chart.pivot(index=cot_ngay, columns=cot_nhom, values=cot_gt).fillna(0)
-                # Chuyển đổi sang datetime.date chuẩn để Streamlit tự xử lý
-                df_pivot.index = pd.to_datetime(df_pivot.index, errors='coerce').date
-                df_pivot = df_pivot[df_pivot.index.notnull()]
+                df_pivot.index = pd.to_datetime(df_pivot.index, format='%d/%m/%Y', errors='coerce')
+                
+                if df_pivot.index.isna().any():
+                    old_index = df_chart.pivot(index=cot_ngay, columns=cot_nhom, values=cot_gt).fillna(0).index
+                    df_pivot.index = pd.to_datetime(old_index, errors='coerce')
+                
                 df_pivot = df_pivot.sort_index()
+                df_pivot.index = df_pivot.index.strftime('%d/%m/%Y')
                 
                 st.markdown("#### 📊 Biểu Đồ Biến Thiên Giá Trị Tồn Kho")
                 st.line_chart(df_pivot)
@@ -183,7 +187,7 @@ with tab1:
             st.dataframe(df_kq_hien_thi, use_container_width=True)
 
 # ==========================================
-# TAB 2: PHÂN TÍCH BÁN HÀNG CHI TIẾT (ĐA CHI NHÁNH & VÁ LỖI HIỂN THỊ)
+# TAB 2: PHÂN TÍCH BÁN HÀNG CHI TIẾT (ĐA CHI NHÁNH & BỘ LỌC THÔNG MINH)
 # ==========================================
 with tab2:
     st.markdown("### 📈 Phân Tích Bán Hàng iPOS (Đa Chi Nhánh)")
@@ -197,16 +201,26 @@ with tab2:
             file_ipos = st.file_uploader(f"2. Tải báo cáo iPOS của {cn_upload}", type=['xlsx', 'xls', 'csv'], key="upload_ipos")
             if file_ipos is not None:
                 try:
+                    # Đọc file (hỗ trợ tiêu đề bị đẩy xuống dòng 1 hoặc 2)
                     if file_ipos.name.endswith('.csv'):
                         df_new = pd.read_csv(file_ipos)
                     else:
                         df_new = pd.read_excel(file_ipos)
                         if 'Tên hàng' not in df_new.columns and len(df_new) > 0:
                             df_new = pd.read_excel(file_ipos, header=1)
+                            if 'Tên hàng' not in df_new.columns and len(df_new) > 0:
+                                df_new = pd.read_excel(file_ipos, header=2)
                     
+                    # --- MÀNG LỌC ĐẶC BIỆT DÀNH RIÊNG CHO LÊ QUANG ĐỊNH ---
+                    if cn_upload == "Lê Quang Định" and "Nguồn" in df_new.columns:
+                        # Chỉ giữ lại các đơn hàng offline để tránh trùng lặp với file Google Sheet
+                        cac_nguon_hop_le = ['mang về', 'mang ve', 'tại chỗ', 'tại chổ', 'tai cho']
+                        df_new = df_new[df_new['Nguồn'].astype(str).str.strip().str.lower().isin(cac_nguon_hop_le)]
+                    
+                    # Gán tên chi nhánh và lưu file
                     df_new['Chi Nhánh Hệ Thống'] = cn_upload
                     df_new.to_csv(f"temp_ipos_{cn_upload}.csv", index=False)
-                    st.success(f"✅ Đã lưu dữ liệu cho chi nhánh {cn_upload}!")
+                    st.success(f"✅ Đã lưu và làm sạch dữ liệu cho chi nhánh {cn_upload}!")
                     st.rerun()
                 except Exception as e:
                     st.error(f"❌ Lỗi đọc file: {e}")
@@ -240,16 +254,11 @@ with tab2:
         df_ban['Tổng tiền'] = pd.to_numeric(df_ban['Tổng tiền'], errors='coerce').fillna(0)
         df_ban = df_ban[df_ban['Tổng tiền'] > 0]
         
-        # --- BỘ LỌC LÀM SẠCH NGÀY THÁNG ĐỂ VẼ BIỂU ĐỒ & ĐỒNG BỘ TAB 4 ---
         time_col_master = next((c for c in df_ban.columns if 'thời gian' in str(c).lower() or 'ngày' in str(c).lower()), None)
         if time_col_master:
-            # 1. Tạo cột Date_Obj dạng datetime chuẩn để Streamlit không bị lỗi khi vẽ biểu đồ
             df_ban['Date_Obj'] = pd.to_datetime(df_ban[time_col_master], errors='coerce').dt.date
-            
-            # 2. Tạo cột String d/m/Y riêng để nhồi qua từ điển Tab 4
             df_ban['Ngày_Chuan_Str'] = pd.to_datetime(df_ban['Date_Obj']).dt.strftime('%d/%m/%Y')
                  
-            # Lưu dữ liệu sạch cho Tab 4
             df_daily_multi = df_ban.groupby(['Chi Nhánh Hệ Thống', 'Ngày_Chuan_Str'])['Tổng tiền'].sum().reset_index()
             dict_doanh_thu = {}
             for cn in df_daily_multi['Chi Nhánh Hệ Thống'].unique():
@@ -279,30 +288,21 @@ with tab2:
             col1.metric("🥤 Tổng Ly Bán Ra", f"{df_ban_view['Số lượng'].sum():,.0f} ly")
             col2.metric("💰 Tổng Doanh Thu", f"{df_ban_view['Tổng tiền'].sum():,.0f} VNĐ")
 
-            # --- KHU VỰC VẼ BIỂU ĐỒ ĐÃ ĐƯỢC VÁ LỖI ---
             if 'Date_Obj' in df_ban_view.columns:
                 st.write("---")
                 st.subheader("📈 1. Biểu Đồ Doanh Thu Theo Ngày")
-                
-                # Loại bỏ các dòng trống ngày tháng
                 df_chart_data = df_ban_view.dropna(subset=['Date_Obj'])
-                
                 if not df_chart_data.empty:
                     df_trend = df_chart_data.groupby(['Date_Obj', 'Chi Nhánh Hệ Thống'])['Tổng tiền'].sum().reset_index()
                     df_pivot_trend = df_trend.pivot(index='Date_Obj', columns='Chi Nhánh Hệ Thống', values='Tổng tiền').fillna(0)
                     df_pivot_trend = df_pivot_trend.sort_index()
-                    
                     st.line_chart(df_pivot_trend)
-                else:
-                    st.warning("Dữ liệu cột thời gian trống, không thể vẽ biểu đồ.")
                 
             st.write("---")
             st.subheader("🔍 2. Bảng Xếp Hạng Món (Theo Size)")
-            
             if 'Date_Obj' in df_ban_view.columns:
                 min_date = df_ban_view['Date_Obj'].dropna().min()
                 max_date = df_ban_view['Date_Obj'].dropna().max()
-                
                 if pd.notnull(min_date) and pd.notnull(max_date):
                     ngay_loc_mon = st.date_input("🗓️ Lọc xếp hạng món theo ngày:", value=(min_date, max_date), min_value=min_date, max_value=max_date)
                     if isinstance(ngay_loc_mon, tuple):
@@ -326,7 +326,6 @@ with tab2:
                 df_mon_hien_thi['Tổng tiền'] = df_mon_hien_thi['Tổng tiền'].apply(lambda x: f"{int(x):,} đ")
                 st.dataframe(df_mon_hien_thi, use_container_width=True)
 
-            # --- KHU VỰC PHÂN TÍCH KHÁCH HÀNG ĐÃ ĐƯỢC VÁ LỖI ---
             phone_col = next((c for c in df_ban_view.columns if 'điện thoại' in str(c).lower() or 'sđt' in str(c).lower() or 'sdt' in str(c).lower()), None)
             ma_hd_col = next((c for c in df_ban_view.columns if 'mã hoá đơn' in str(c).lower() or 'mã hóa đơn' in str(c).lower() or 'hóa đơn' in str(c).lower() or 'hoá đơn' in str(c).lower()), None)
             name_col = next((c for c in df_ban_view.columns if 'tên khách' in str(c).lower() or 'khách hàng' in str(c).lower()), None)
@@ -334,15 +333,10 @@ with tab2:
             if phone_col and ma_hd_col:
                 st.write("---")
                 st.subheader("🤝 3. Phân Tích Lượt Khách Quay Lại (SĐT)")
-                
                 df_kh = df_ban_view.copy()
-                
-                # Đổi thành dạng chuỗi, xóa số thập phân và các khoảng trắng
                 df_kh[phone_col] = df_kh[phone_col].astype(str).replace('nan', '')
                 df_kh[phone_col] = df_kh[phone_col].str.replace(r'\.0$', '', regex=True)
                 df_kh[phone_col] = df_kh[phone_col].str.replace(r'[^\d]', '', regex=True)
-                
-                # Bỏ qua những dòng SĐT rỗng
                 df_kh = df_kh[df_kh[phone_col] != '']
                 
                 if not df_kh.empty:
