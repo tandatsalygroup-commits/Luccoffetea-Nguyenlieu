@@ -169,14 +169,10 @@ with tab1:
             
             if not df_chart.empty:
                 df_pivot = df_chart.pivot(index=cot_ngay, columns=cot_nhom, values=cot_gt).fillna(0)
-                df_pivot.index = pd.to_datetime(df_pivot.index, format='%d/%m/%Y', errors='coerce')
-                
-                if df_pivot.index.isna().any():
-                    old_index = df_chart.pivot(index=cot_ngay, columns=cot_nhom, values=cot_gt).fillna(0).index
-                    df_pivot.index = pd.to_datetime(old_index, errors='coerce')
-                
+                # Chuyển đổi sang datetime.date chuẩn để Streamlit tự xử lý
+                df_pivot.index = pd.to_datetime(df_pivot.index, errors='coerce').date
+                df_pivot = df_pivot[df_pivot.index.notnull()]
                 df_pivot = df_pivot.sort_index()
-                df_pivot.index = df_pivot.index.strftime('%d/%m/%Y')
                 
                 st.markdown("#### 📊 Biểu Đồ Biến Thiên Giá Trị Tồn Kho")
                 st.line_chart(df_pivot)
@@ -187,7 +183,7 @@ with tab1:
             st.dataframe(df_kq_hien_thi, use_container_width=True)
 
 # ==========================================
-# TAB 2: PHÂN TÍCH BÁN HÀNG CHI TIẾT (ĐA CHI NHÁNH & VÁ LỖI)
+# TAB 2: PHÂN TÍCH BÁN HÀNG CHI TIẾT (ĐA CHI NHÁNH & VÁ LỖI HIỂN THỊ)
 # ==========================================
 with tab2:
     st.markdown("### 📈 Phân Tích Bán Hàng iPOS (Đa Chi Nhánh)")
@@ -247,11 +243,11 @@ with tab2:
         # --- BỘ LỌC LÀM SẠCH NGÀY THÁNG ĐỂ VẼ BIỂU ĐỒ & ĐỒNG BỘ TAB 4 ---
         time_col_master = next((c for c in df_ban.columns if 'thời gian' in str(c).lower() or 'ngày' in str(c).lower()), None)
         if time_col_master:
-            # Cắt bỏ giờ phút, chỉ lấy ngày tháng năm
-            df_ban['Ngày_Chuan_Str'] = pd.to_datetime(df_ban[time_col_master], dayfirst=True, errors='coerce').dt.strftime('%d/%m/%Y')
-            mask = df_ban['Ngày_Chuan_Str'].isna()
-            if mask.any():
-                df_ban.loc[mask, 'Ngày_Chuan_Str'] = pd.to_datetime(df_ban.loc[mask, time_col_master], errors='coerce').dt.strftime('%d/%m/%Y')
+            # 1. Tạo cột Date_Obj dạng datetime chuẩn để Streamlit không bị lỗi khi vẽ biểu đồ
+            df_ban['Date_Obj'] = pd.to_datetime(df_ban[time_col_master], errors='coerce').dt.date
+            
+            # 2. Tạo cột String d/m/Y riêng để nhồi qua từ điển Tab 4
+            df_ban['Ngày_Chuan_Str'] = pd.to_datetime(df_ban['Date_Obj']).dt.strftime('%d/%m/%Y')
                  
             # Lưu dữ liệu sạch cho Tab 4
             df_daily_multi = df_ban.groupby(['Chi Nhánh Hệ Thống', 'Ngày_Chuan_Str'])['Tổng tiền'].sum().reset_index()
@@ -284,25 +280,28 @@ with tab2:
             col2.metric("💰 Tổng Doanh Thu", f"{df_ban_view['Tổng tiền'].sum():,.0f} VNĐ")
 
             # --- KHU VỰC VẼ BIỂU ĐỒ ĐÃ ĐƯỢC VÁ LỖI ---
-            if 'Ngày_Chuan_Str' in df_ban_view.columns:
+            if 'Date_Obj' in df_ban_view.columns:
                 st.write("---")
                 st.subheader("📈 1. Biểu Đồ Doanh Thu Theo Ngày")
-                df_trend = df_ban_view.groupby(['Ngày_Chuan_Str', 'Chi Nhánh Hệ Thống'])['Tổng tiền'].sum().reset_index()
                 
-                if not df_trend.empty:
-                    df_pivot_trend = df_trend.pivot(index='Ngày_Chuan_Str', columns='Chi Nhánh Hệ Thống', values='Tổng tiền').fillna(0)
-                    df_pivot_trend.index = pd.to_datetime(df_pivot_trend.index, format='%d/%m/%Y', errors='coerce')
+                # Loại bỏ các dòng trống ngày tháng
+                df_chart_data = df_ban_view.dropna(subset=['Date_Obj'])
+                
+                if not df_chart_data.empty:
+                    df_trend = df_chart_data.groupby(['Date_Obj', 'Chi Nhánh Hệ Thống'])['Tổng tiền'].sum().reset_index()
+                    df_pivot_trend = df_trend.pivot(index='Date_Obj', columns='Chi Nhánh Hệ Thống', values='Tổng tiền').fillna(0)
                     df_pivot_trend = df_pivot_trend.sort_index()
-                    df_pivot_trend.index = df_pivot_trend.index.strftime('%d/%m/%Y')
+                    
                     st.line_chart(df_pivot_trend)
+                else:
+                    st.warning("Dữ liệu cột thời gian trống, không thể vẽ biểu đồ.")
                 
             st.write("---")
             st.subheader("🔍 2. Bảng Xếp Hạng Món (Theo Size)")
             
-            if 'Ngày_Chuan_Str' in df_ban_view.columns:
-                df_ban_view['Date_Obj'] = pd.to_datetime(df_ban_view['Ngày_Chuan_Str'], format='%d/%m/%Y', errors='coerce').dt.date
-                min_date = df_ban_view['Date_Obj'].min()
-                max_date = df_ban_view['Date_Obj'].max()
+            if 'Date_Obj' in df_ban_view.columns:
+                min_date = df_ban_view['Date_Obj'].dropna().min()
+                max_date = df_ban_view['Date_Obj'].dropna().max()
                 
                 if pd.notnull(min_date) and pd.notnull(max_date):
                     ngay_loc_mon = st.date_input("🗓️ Lọc xếp hạng món theo ngày:", value=(min_date, max_date), min_value=min_date, max_value=max_date)
@@ -337,14 +336,14 @@ with tab2:
                 st.subheader("🤝 3. Phân Tích Lượt Khách Quay Lại (SĐT)")
                 
                 df_kh = df_ban_view.copy()
-                df_kh = df_kh.dropna(subset=[phone_col])
                 
-                # Làm sạch triệt để: Chuyển sang text -> Cạo bỏ số thập phân -> Cạo bỏ chữ và ký tự lạ
-                df_kh[phone_col] = df_kh[phone_col].astype(str).str.replace(r'\.0$', '', regex=True)
+                # Đổi thành dạng chuỗi, xóa số thập phân và các khoảng trắng
+                df_kh[phone_col] = df_kh[phone_col].astype(str).replace('nan', '')
+                df_kh[phone_col] = df_kh[phone_col].str.replace(r'\.0$', '', regex=True)
                 df_kh[phone_col] = df_kh[phone_col].str.replace(r'[^\d]', '', regex=True)
                 
-                # Chỉ lấy những dòng có số điện thoại từ 8 chữ số trở lên (Lọc các số rác)
-                df_kh = df_kh[df_kh[phone_col].str.len() >= 8]
+                # Bỏ qua những dòng SĐT rỗng
+                df_kh = df_kh[df_kh[phone_col] != '']
                 
                 if not df_kh.empty:
                     df_kh_stats = df_kh.groupby(phone_col).agg(
