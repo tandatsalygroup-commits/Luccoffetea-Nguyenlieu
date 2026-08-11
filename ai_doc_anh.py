@@ -187,7 +187,7 @@ with tab1:
             st.dataframe(df_kq_hien_thi, use_container_width=True)
 
 # ==========================================
-# TAB 2: PHÂN TÍCH BÁN HÀNG CHI TIẾT (ĐA CHI NHÁNH & BỘ LỌC THÔNG MINH)
+# TAB 2: PHÂN TÍCH BÁN HÀNG CHI TIẾT (ĐA CHI NHÁNH & VÁ LỖI EMPTY DATA)
 # ==========================================
 with tab2:
     st.markdown("### 📈 Phân Tích Bán Hàng iPOS (Đa Chi Nhánh)")
@@ -201,7 +201,6 @@ with tab2:
             file_ipos = st.file_uploader(f"2. Tải báo cáo iPOS của {cn_upload}", type=['xlsx', 'xls', 'csv'], key="upload_ipos")
             if file_ipos is not None:
                 try:
-                    # Đọc file (hỗ trợ tiêu đề bị đẩy xuống dòng 1 hoặc 2)
                     if file_ipos.name.endswith('.csv'):
                         df_new = pd.read_csv(file_ipos)
                     else:
@@ -213,15 +212,18 @@ with tab2:
                     
                     # --- MÀNG LỌC ĐẶC BIỆT DÀNH RIÊNG CHO LÊ QUANG ĐỊNH ---
                     if cn_upload == "Lê Quang Định" and "Nguồn" in df_new.columns:
-                        # Chỉ giữ lại các đơn hàng offline để tránh trùng lặp với file Google Sheet
-                        cac_nguon_hop_le = ['mang về', 'mang ve', 'tại chỗ', 'tại chổ', 'tai cho']
+                        # Thêm các biến thể chính tả để lọc triệt để
+                        cac_nguon_hop_le = ['mang về', 'mang ve', 'tại chỗ', 'tại chổ', 'tai cho', 'tại cho', 'tai chỗ']
                         df_new = df_new[df_new['Nguồn'].astype(str).str.strip().str.lower().isin(cac_nguon_hop_le)]
                     
-                    # Gán tên chi nhánh và lưu file
-                    df_new['Chi Nhánh Hệ Thống'] = cn_upload
-                    df_new.to_csv(f"temp_ipos_{cn_upload}.csv", index=False)
-                    st.success(f"✅ Đã lưu và làm sạch dữ liệu cho chi nhánh {cn_upload}!")
-                    st.rerun()
+                    if df_new.empty:
+                        st.error(f"❌ Dữ liệu trống! (Có thể do file rỗng hoặc sau khi lọc không còn đơn Offline nào hợp lệ).")
+                    else:
+                        # Gán tên chi nhánh và lưu file
+                        df_new['Chi Nhánh Hệ Thống'] = cn_upload
+                        df_new.to_csv(f"temp_ipos_{cn_upload}.csv", index=False)
+                        st.success(f"✅ Đã lưu và làm sạch dữ liệu cho chi nhánh {cn_upload}!")
+                        st.rerun()
                 except Exception as e:
                     st.error(f"❌ Lỗi đọc file: {e}")
                     
@@ -239,11 +241,23 @@ with tab2:
                 else:
                     st.error(f"🔴 **{cn}**: Đang trống")
 
+    # --- KHẮC PHỤC LỖI EMPTY DATA ERROR TẠI ĐÂY ---
     df_ban_goc_list = []
     for cn in danh_sach_cn_he_thong:
         file_path = f"temp_ipos_{cn}.csv"
         if os.path.exists(file_path):
-            df_ban_goc_list.append(pd.read_csv(file_path))
+            try:
+                # Kiểm tra dung lượng file lớn hơn 0 mới tiến hành đọc
+                if os.path.getsize(file_path) > 0:
+                    df_temp = pd.read_csv(file_path)
+                    if not df_temp.empty:
+                        df_ban_goc_list.append(df_temp)
+                else:
+                    os.remove(file_path) # Tự động dọn dẹp file rác 0 byte
+            except pd.errors.EmptyDataError:
+                os.remove(file_path) # Xóa file gây lỗi nếu vẫn bị lọt
+            except Exception as e:
+                pass
             
     if df_ban_goc_list:
         df_ban_master = pd.concat(df_ban_goc_list, ignore_index=True)
