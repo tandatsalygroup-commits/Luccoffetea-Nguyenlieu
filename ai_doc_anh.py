@@ -46,10 +46,11 @@ def doc_du_lieu_gg_sheet(link, ten_tab):
     xlsx_url = f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=xlsx"
     return pd.read_excel(xlsx_url, sheet_name=ten_tab)
 
-tab1, tab2, tab3, tab4 = st.tabs(["📦 Xử Lý Tồn Kho", "📈 Phân Tích Bán Hàng Chi Tiết", "📋 Quản Lý Menu Gốc", "🧮 Phân Tích % Nguyên Liệu"])
+# Cập nhật tên Tab 4
+tab1, tab2, tab3, tab4 = st.tabs(["📦 Xử Lý Tồn Kho", "📈 Phân Tích Bán Hàng Chi Tiết", "📋 Quản Lý Menu Gốc", "🧮 Phân Tích % NL - CN Trường Sa"])
 
 # ==========================================
-# TAB 1: XỬ LÝ TỒN KHO (CẢI TIẾN LỌC NHIỀU CHI NHÁNH & KHOẢNG NGÀY)
+# TAB 1: XỬ LÝ TỒN KHO 
 # ==========================================
 with tab1:
     st.markdown("### 📦 Quản Lý Dữ Liệu Tồn Kho")
@@ -96,30 +97,27 @@ with tab1:
                 df_kho_goc.to_csv("temp_kho.csv", index=False)
                 st.rerun()
 
-    # --- TIẾN HÀNH XỬ LÝ NẾU CÓ DỮ LIỆU ---
+    # --- LƯU DỮ LIỆU KHO VÀO SESSION ĐỂ TAB 4 SỬ DỤNG ---
     if not df_kho_goc.empty:
+        st.session_state['df_kho_goc'] = df_kho_goc.copy()
         df_kho = df_kho_goc.copy()
+        
         st.write("---")
         st.write("### 🎛️ BỘ LỌC TÙY CHỈNH (CHI NHÁNH & THỜI GIAN)")
         
-        # Nhận diện cột tự động để hỗ trợ lọc
         cols = df_kho.columns.tolist()
-        
         col_f1, col_f2 = st.columns(2)
         
-        # 1. Bộ lọc Chi Nhánh (Chọn nhiều)
         with col_f1:
             cot_chi_nhanh = "Chi nhánh" if "Chi nhánh" in cols else ("Chi Nhánh" if "Chi Nhánh" in cols else None)
             if cot_chi_nhanh:
                 danh_sach_cn = df_kho[cot_chi_nhanh].dropna().unique().tolist()
-                # Cho phép chọn nhiều chi nhánh (Mặc định chọn tất cả)
                 cn_chon = st.multiselect("🏢 Chọn Chi Nhánh Cần Phân Tích:", options=danh_sach_cn, default=danh_sach_cn)
                 if cn_chon:
                     df_kho = df_kho[df_kho[cot_chi_nhanh].isin(cn_chon)]
             else:
                 st.info("Bảng không có cột định danh 'Chi nhánh'")
                 
-        # 2. Bộ lọc Thời gian (Khoảng ngày)
         with col_f2:
             date_cols = [c for c in df_kho.columns if 'ngày' in c.lower() or 'date' in c.lower() or 'thời gian' in c.lower()]
             if date_cols:
@@ -146,7 +144,6 @@ with tab1:
         st.write("🔍 **Bản xem trước dữ liệu (Sau khi lọc):**")
         st.dataframe(df_kho.head(5), use_container_width=True)
         
-        # --- KHU VỰC TRÍCH XUẤT VÀ VẼ BIỂU ĐỒ ---
         st.write("---")
         st.write("### 📈 TRÍCH XUẤT BÁO CÁO & VẼ BIỂU ĐỒ XU HƯỚNG")
         danh_sach_cot_loc = df_kho.columns.tolist()
@@ -164,40 +161,28 @@ with tab1:
             
         if st.button("🚀 Xử Lý Dữ Liệu & Vẽ Biểu Đồ"):
             df_kq = df_kho[[cot_nhom, cot_ngay, cot_gt]].copy()
-            df_kq = df_kq.dropna(how='any') # Xóa các dòng bị thiếu data
+            df_kq = df_kq.dropna(how='any') 
             
-            # Xử lý làm sạch số liệu tiền tệ
             df_kq[cot_gt] = df_kq[cot_gt].apply(clean_money)
             
-            # Sắp xếp đúng trình tự ngày tháng để biểu đồ không bị rối
-            df_kq['_date_sort'] = pd.to_datetime(df_kq[cot_ngay], format='%d/%m/%Y', errors='coerce')
-            if df_kq['_date_sort'].isna().all():
-                df_kq['_date_sort'] = pd.to_datetime(df_kq[cot_ngay], errors='coerce')
-            df_kq = df_kq.sort_values('_date_sort')
-            
-            # --- VẼ BIỂU ĐỒ ĐƯỜNG SO SÁNH ---
-            st.markdown("#### 📊 Biểu Đồ Biến Thiên Giá Trị Tồn Kho")
             df_chart = df_kq.groupby([cot_ngay, cot_nhom])[cot_gt].sum().reset_index()
             
-            df_chart['_date_sort'] = pd.to_datetime(df_chart[cot_ngay], format='%d/%m/%Y', errors='coerce')
-            if df_chart['_date_sort'].isna().all():
-                df_chart['_date_sort'] = pd.to_datetime(df_chart[cot_ngay], errors='coerce')
-            df_chart = df_chart.sort_values('_date_sort')
-            
             if not df_chart.empty:
-                # Chuyển đổi dữ liệu sang dạng ma trận để Streamlit vẽ nhiều đường
                 df_pivot = df_chart.pivot(index=cot_ngay, columns=cot_nhom, values=cot_gt).fillna(0)
-                # Sắp xếp lại index ngày tháng
-                df_pivot.index = pd.to_datetime(df_pivot.index, format='%d/%m/%Y', errors='ignore')
+                df_pivot.index = pd.to_datetime(df_pivot.index, format='%d/%m/%Y', errors='coerce')
+                
+                if df_pivot.index.isna().any():
+                    old_index = df_chart.pivot(index=cot_ngay, columns=cot_nhom, values=cot_gt).fillna(0).index
+                    df_pivot.index = pd.to_datetime(old_index, errors='coerce')
+                
                 df_pivot = df_pivot.sort_index()
-                # Chuyển index lại thành chuỗi để hiển thị
                 df_pivot.index = df_pivot.index.strftime('%d/%m/%Y')
                 
+                st.markdown("#### 📊 Biểu Đồ Biến Thiên Giá Trị Tồn Kho")
                 st.line_chart(df_pivot)
             
-            # --- BẢNG BÁO CÁO TỔNG HỢP ---
             st.markdown("#### 📋 Bảng Báo Cáo Chi Tiết")
-            df_kq_hien_thi = df_kq.drop(columns=['_date_sort'])
+            df_kq_hien_thi = df_kq.copy()
             df_kq_hien_thi[cot_gt] = df_kq_hien_thi[cot_gt].apply(lambda x: f"{x:,} đ")
             st.dataframe(df_kq_hien_thi, use_container_width=True)
 
@@ -345,24 +330,77 @@ with tab3:
             st.rerun()
 
 # ==========================================
-# TAB 4: PHÂN TÍCH % NGUYÊN LIỆU
+# TAB 4: PHÂN TÍCH % NGUYÊN LIỆU (TỰ ĐỘNG ĐỒNG BỘ TỒN ĐẦU/CUỐI)
 # ==========================================
 with tab4:
-    st.markdown("### 🧮 Quản Trị Tỷ Lệ % Nguyên Liệu (Food Cost)")
-    st.info("Công cụ tính toán Tỷ Lệ Thực tế. Chọn ngày để hệ thống tự động bóc tách doanh thu.")
+    st.markdown("### 🧮 Quản Trị Tỷ Lệ % Nguyên Liệu (Food Cost) - CN Trường Sa")
+    st.info("Công cụ tự động lấp dữ liệu Tồn Kho từ Tab 1 và Doanh Thu từ Tab 2 dựa theo chi nhánh và ngày được chọn.")
     
-    today = datetime.date.today()
-    ngay_tinh = st.date_input("🎯 Chọn ngày kiểm toán:", value=(today, today))
-    
-    if isinstance(ngay_tinh, tuple):
-        start_date = ngay_tinh[0]
-        end_date = ngay_tinh[1] if len(ngay_tinh) > 1 else start_date
-    else:
-        start_date = end_date = ngay_tinh
+    # --- 1. LỰA CHỌN THỜI GIAN VÀ CHI NHÁNH ---
+    col_filter1, col_filter2 = st.columns(2)
+    with col_filter1:
+        today = datetime.date.today()
+        ngay_tinh = st.date_input("🎯 Chọn ngày kiểm toán:", value=(today, today))
+        if isinstance(ngay_tinh, tuple):
+            start_date = ngay_tinh[0]
+            end_date = ngay_tinh[1] if len(ngay_tinh) > 1 else start_date
+        else:
+            start_date = end_date = ngay_tinh
+            
+        date_list = pd.date_range(start_date, end_date).strftime('%d/%m/%Y').tolist()
+        chuoi_hien_thi = f"từ {start_date.strftime('%d/%m')} đến {end_date.strftime('%d/%m')}" if start_date != end_date else f"ngày {start_date.strftime('%d/%m')}"
         
-    date_list = pd.date_range(start_date, end_date).strftime('%d/%m/%Y').tolist()
-    chuoi_hien_thi = f"từ {start_date.strftime('%d/%m')} đến {end_date.strftime('%d/%m')}" if start_date != end_date else f"ngày {start_date.strftime('%d/%m')}"
+    with col_filter2:
+        # Lấy danh sách chi nhánh từ dữ liệu đã nạp ở Tab 1
+        danh_sach_cn_tab4 = ["Trường Sa", "Lê Quang Định", "Trần Huy Liệu"] # Mặc định
+        if 'df_kho_goc' in st.session_state and not st.session_state['df_kho_goc'].empty:
+            cols_t1 = st.session_state['df_kho_goc'].columns.tolist()
+            cot_cn_t1 = "Chi nhánh" if "Chi nhánh" in cols_t1 else ("Chi Nhánh" if "Chi Nhánh" in cols_t1 else None)
+            if cot_cn_t1:
+                danh_sach_cn_tab4 = st.session_state['df_kho_goc'][cot_cn_t1].dropna().unique().tolist()
+                # Đưa Trường Sa lên đầu danh sách ưu tiên
+                if "Trường Sa" in danh_sach_cn_tab4:
+                    danh_sach_cn_tab4.remove("Trường Sa")
+                    danh_sach_cn_tab4.insert(0, "Trường Sa")
+                else:
+                    danh_sach_cn_tab4.insert(0, "Trường Sa")
+        
+        cn_doisoat = st.selectbox("🏢 Chọn Chi nhánh để đối chiếu Tồn Kho:", options=danh_sach_cn_tab4)
+
+    # --- 2. THUẬT TOÁN TỰ ĐỘNG LẤY TỒN ĐẦU / TỒN CUỐI TỪ TAB 1 ---
+    ton_dau_auto = 0
+    ton_cuoi_auto = 0
     
+    if 'df_kho_goc' in st.session_state and not st.session_state['df_kho_goc'].empty:
+        df_k = st.session_state['df_kho_goc'].copy()
+        cols_k = df_k.columns.tolist()
+        
+        cot_cn = "Chi nhánh" if "Chi nhánh" in cols_k else ("Chi Nhánh" if "Chi Nhánh" in cols_k else None)
+        date_cols = [c for c in cols_k if 'ngày' in c.lower() or 'date' in c.lower() or 'thời gian' in c.lower()]
+        cot_ngay = date_cols[0] if date_cols else None
+        cot_gt = "Tổng Giá Trị Tồn Kho" if "Tổng Giá Trị Tồn Kho" in cols_k else None
+        
+        if cot_cn and cot_ngay and cot_gt:
+            # Lọc theo Chi nhánh đã chọn
+            df_k_cn = df_k[df_k[cot_cn] == cn_doisoat].copy()
+            
+            # Xử lý định dạng ngày tháng và tiền tệ
+            df_k_cn['Date_Obj'] = pd.to_datetime(df_k_cn[cot_ngay], format='%d/%m/%Y', errors='coerce').dt.date
+            if df_k_cn['Date_Obj'].isna().all():
+                df_k_cn['Date_Obj'] = pd.to_datetime(df_k_cn[cot_ngay], errors='coerce').dt.date
+            df_k_cn[cot_gt] = df_k_cn[cot_gt].apply(clean_money)
+            
+            # Tồn Đầu = Giá trị tồn kho của ngày đang chọn (start_date)
+            td_df = df_k_cn[df_k_cn['Date_Obj'] == start_date]
+            if not td_df.empty:
+                ton_dau_auto = td_df[cot_gt].sum()
+                
+            # Tồn Cuối = Giá trị tồn kho của ngày hôm sau (end_date + 1 ngày)
+            ngay_hom_sau = end_date + datetime.timedelta(days=1)
+            tc_df = df_k_cn[df_k_cn['Date_Obj'] == ngay_hom_sau]
+            if not tc_df.empty:
+                ton_cuoi_auto = tc_df[cot_gt].sum()
+
     st.write(f"#### 1. Doanh Thu {chuoi_hien_thi}")
     col_dt1, col_dt2 = st.columns(2)
     
@@ -424,13 +462,18 @@ with tab4:
     
     st.write("---")
     st.write(f"#### 2. Dữ Liệu Kho {chuoi_hien_thi}")
+    if ton_dau_auto > 0 or ton_cuoi_auto > 0:
+        st.success(f"🤖 Đã tự động điền Tồn Đầu (ngày {start_date.strftime('%d/%m')}) và Tồn Cuối (ngày {(end_date + datetime.timedelta(days=1)).strftime('%d/%m')}) của CN {cn_doisoat} từ Tab 1.")
+    else:
+        st.caption("*(Chưa tìm thấy dữ liệu tự động, anh có thể tải dữ liệu lên Tab 1 hoặc tự nhập tay)*")
+        
     col_k1, col_k2, col_k3 = st.columns(3)
     with col_k1:
-        ton_dau = st.number_input("📦 Tồn Đầu (VNĐ)", min_value=0, value=0, step=100000)
+        ton_dau = st.number_input("📦 Tồn Đầu (VNĐ)", min_value=0, value=int(ton_dau_auto), step=100000)
     with col_k2:
         nhap_trong_ngay = st.number_input("🛒 Nhập Hàng (VNĐ)", min_value=0, value=0, step=100000)
     with col_k3:
-        ton_cuoi = st.number_input("📉 Tồn Cuối (VNĐ)", min_value=0, value=0, step=100000)
+        ton_cuoi = st.number_input("📉 Tồn Cuối (VNĐ)", min_value=0, value=int(ton_cuoi_auto), step=100000)
 
     if st.button(f"🧮 Báo Cáo % Nguyên Liệu {chuoi_hien_thi}"):
         tong_doanh_thu = dt_offline + dt_online
