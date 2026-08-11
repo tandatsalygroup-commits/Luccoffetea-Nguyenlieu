@@ -6,13 +6,13 @@ import re
 import datetime
 
 # ==========================================
-# CẤU HÌNH TRANG & GIAO DIỆN (UI/UX) ĐÃ NÂNG CẤP
+# CẤU HÌNH TRANG & GIAO DIỆN (UI/UX)
 # ==========================================
 st.set_page_config(page_title="Hệ Thống Quản Trị F&B", layout="wide", page_icon="📊")
 
 st.markdown("""
 <style>
-    /* 1. NỀN TRANG: Tông màu kem pastel sáng, kèm họa tiết chấm bi chìm cực mờ */
+    /* NỀN TRANG VÀ FONT */
     .stApp { 
         background-color: #FDFBF7; 
         background-image: radial-gradient(#EFEBE5 1px, transparent 1px);
@@ -20,98 +20,27 @@ st.markdown("""
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
     }
     
-    /* 2. CHỮ & TIÊU ĐỀ: Tông nâu gỗ sang trọng */
-    h1, h2, h3, h4, h5 { 
-        color: #5C4D42 !important; 
-        font-weight: 600 !important; 
-        letter-spacing: 0.5px;
-    }
+    /* CHỮ & TIÊU ĐỀ */
+    h1, h2, h3, h4, h5 { color: #5C4D42 !important; font-weight: 600 !important; letter-spacing: 0.5px; }
+    hr { border: 0; height: 1px; background-image: linear-gradient(to right, rgba(196, 164, 132, 0), rgba(196, 164, 132, 0.6), rgba(196, 164, 132, 0)); margin: 2em 0; }
     
-    /* 3. ĐƯỜNG KẺ NGANG (LINE): Hiệu ứng mờ dần về 2 đầu */
-    hr {
-        border: 0;
-        height: 1px;
-        background-image: linear-gradient(to right, rgba(196, 164, 132, 0), rgba(196, 164, 132, 0.6), rgba(196, 164, 132, 0));
-        margin: 2em 0;
-    }
+    /* TABS MENU */
+    .stTabs [data-baseweb="tab-list"] { gap: 10px; padding-bottom: 5px; border-bottom: 1px solid #EAEAEA; flex-wrap: wrap; }
+    .stTabs [data-baseweb="tab"] { background-color: #F5EFEB; border-radius: 8px 8px 0px 0px; padding: 10px 20px; color: #8C7B6D; font-weight: 500; border: none; transition: all 0.3s ease; font-size: 15px; }
+    .stTabs [data-baseweb="tab"]:hover { background-color: #EAE0D5; color: #5C4D42; }
+    .stTabs [aria-selected="true"] { background-color: #FFFFFF !important; color: #4A4036 !important; font-weight: 700; border-bottom: 3px solid #D2B48C !important; box-shadow: 0 -3px 5px rgba(0,0,0,0.01); }
     
-    /* 4. TABS MENU: Bo góc mềm, đổi màu hover */
-    .stTabs [data-baseweb="tab-list"] { 
-        gap: 10px; 
-        padding-bottom: 5px; 
-        border-bottom: 1px solid #EAEAEA;
-        flex-wrap: wrap;
-    }
-    .stTabs [data-baseweb="tab"] { 
-        background-color: #F5EFEB; 
-        border-radius: 8px 8px 0px 0px; 
-        padding: 10px 20px; 
-        color: #8C7B6D; 
-        font-weight: 500; 
-        border: none; 
-        transition: all 0.3s ease;
-        font-size: 15px;
-    }
-    .stTabs [data-baseweb="tab"]:hover {
-        background-color: #EAE0D5;
-        color: #5C4D42;
-    }
-    .stTabs [aria-selected="true"] { 
-        background-color: #FFFFFF !important; 
-        color: #4A4036 !important; 
-        font-weight: 700; 
-        border-bottom: 3px solid #D2B48C !important; 
-        box-shadow: 0 -3px 5px rgba(0,0,0,0.01);
-    }
+    /* METRICS (SỐ LIỆU) */
+    div[data-testid="metric-container"] { background-color: #FFFFFF; border: 1px solid #F0F0F0; border-left: 4px solid #C4A484; padding: 20px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); transition: transform 0.2s ease; }
+    div[data-testid="metric-container"]:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.06); }
     
-    /* 5. METRICS (CÁC CON SỐ THỐNG KÊ): Hiệu ứng thẻ Card có điểm nhấn viền trái */
-    div[data-testid="metric-container"] { 
-        background-color: #FFFFFF; 
-        border: 1px solid #F0F0F0; 
-        border-left: 4px solid #C4A484; /* Điểm nhấn viền màu cafe sữa */
-        padding: 20px; 
-        border-radius: 10px; 
-        box-shadow: 0 4px 15px rgba(0,0,0,0.03); 
-        transition: transform 0.2s ease;
-    }
-    div[data-testid="metric-container"]:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(0,0,0,0.06); 
-    }
+    /* BUTTONS */
+    .stButton>button { background-color: #6B5E53; color: #FFFFFF; border-radius: 6px; border: none; padding: 0.5rem 1rem; font-weight: 500; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); box-shadow: 0 2px 4px rgba(107, 94, 83, 0.2); }
+    .stButton>button:hover { background-color: #4A4036; color: #FFFFFF; box-shadow: 0 4px 8px rgba(74, 64, 54, 0.3); }
     
-    /* 6. NÚT BẤM (BUTTONS) */
-    .stButton>button { 
-        background-color: #6B5E53; 
-        color: #FFFFFF; 
-        border-radius: 6px; 
-        border: none; 
-        padding: 0.5rem 1rem;
-        font-weight: 500;
-        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-        box-shadow: 0 2px 4px rgba(107, 94, 83, 0.2);
-    }
-    .stButton>button:hover { 
-        background-color: #4A4036; 
-        color: #FFFFFF; 
-        box-shadow: 0 4px 8px rgba(74, 64, 54, 0.3);
-    }
-    
-    /* 7. BẢNG DỮ LIỆU (DATAFRAME) */
-    .stDataFrame { 
-        border-radius: 10px; 
-        overflow: hidden; 
-        border: 1px solid #EAEAEA; 
-        box-shadow: 0 2px 8px rgba(0,0,0,0.02);
-    }
-    
-    /* 8. KHUNG EXPANDER (Mở rộng/Thu gọn) */
-    .streamlit-expanderHeader {
-        background-color: #FFFFFF;
-        border-radius: 8px;
-        border: 1px solid #EAEAEA;
-        color: #5C4D42;
-        font-weight: 500;
-    }
+    /* DATAFRAME */
+    .stDataFrame { border-radius: 10px; overflow: hidden; border: 1px solid #EAEAEA; box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
+    .streamlit-expanderHeader { background-color: #FFFFFF; border-radius: 8px; border: 1px solid #EAEAEA; color: #5C4D42; font-weight: 500; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -220,9 +149,11 @@ with tab1:
             date_cols = [c for c in df_kho.columns if 'ngày' in c.lower() or 'date' in c.lower() or 'thời gian' in c.lower()]
             if date_cols:
                 date_col = date_cols[0]
+                # Xử lý ngày tháng chuyên sâu
                 df_kho['_temp_date'] = pd.to_datetime(df_kho[date_col], format='%d/%m/%Y', errors='coerce')
-                if df_kho['_temp_date'].isna().all():
-                    df_kho['_temp_date'] = pd.to_datetime(df_kho[date_col], errors='coerce')
+                mask_k = df_kho['_temp_date'].isna()
+                if mask_k.any():
+                    df_kho.loc[mask_k, '_temp_date'] = pd.to_datetime(df_kho.loc[mask_k, date_col], errors='coerce', dayfirst=True)
                 
                 df_kho['_temp_date_obj'] = df_kho['_temp_date'].dt.date
                 min_date = df_kho['_temp_date_obj'].min()
@@ -262,16 +193,14 @@ with tab1:
             df_kq = df_kq.dropna(how='any') 
             
             df_kq[cot_gt] = df_kq[cot_gt].apply(clean_money)
-            
             df_chart = df_kq.groupby([cot_ngay, cot_nhom])[cot_gt].sum().reset_index()
             
             if not df_chart.empty:
                 df_pivot = df_chart.pivot(index=cot_ngay, columns=cot_nhom, values=cot_gt).fillna(0)
                 df_pivot.index = pd.to_datetime(df_pivot.index, format='%d/%m/%Y', errors='coerce')
-                
                 if df_pivot.index.isna().any():
                     old_index = df_chart.pivot(index=cot_ngay, columns=cot_nhom, values=cot_gt).fillna(0).index
-                    df_pivot.index = pd.to_datetime(old_index, errors='coerce')
+                    df_pivot.index = pd.to_datetime(old_index, errors='coerce', dayfirst=True)
                 
                 df_pivot = df_pivot.sort_index()
                 df_pivot.index = df_pivot.index.strftime('%d/%m/%Y')
@@ -285,7 +214,7 @@ with tab1:
             st.dataframe(df_kq_hien_thi, use_container_width=True)
 
 # ==========================================
-# TAB 2: PHÂN TÍCH BÁN HÀNG CHI TIẾT
+# TAB 2: PHÂN TÍCH BÁN HÀNG CHI TIẾT 
 # ==========================================
 with tab2:
     st.markdown("### 📈 Phân Tích Bán Hàng iPOS (Đa Chi Nhánh)")
@@ -361,9 +290,14 @@ with tab2:
         df_ban['Tổng tiền'] = pd.to_numeric(df_ban['Tổng tiền'], errors='coerce').fillna(0)
         df_ban = df_ban[df_ban['Tổng tiền'] > 0]
         
+        # --- BỘ LỌC XỬ LÝ NGÀY THÁNG ĐƯỢC NÂNG CẤP ĐỂ ĐỒNG BỘ ---
         time_col_master = next((c for c in df_ban.columns if 'thời gian' in str(c).lower() or 'ngày' in str(c).lower()), None)
         if time_col_master:
-            df_ban['Date_Obj'] = pd.to_datetime(df_ban[time_col_master], errors='coerce').dt.date
+            df_ban['Date_Obj'] = pd.to_datetime(df_ban[time_col_master], format='%d/%m/%Y', errors='coerce').dt.date
+            mask_ban = df_ban['Date_Obj'].isna()
+            if mask_ban.any():
+                df_ban.loc[mask_ban, 'Date_Obj'] = pd.to_datetime(df_ban.loc[mask_ban, time_col_master], errors='coerce', dayfirst=True).dt.date
+            
             df_ban['Ngày_Chuan_Str'] = pd.to_datetime(df_ban['Date_Obj']).dt.strftime('%d/%m/%Y')
                  
             df_daily_multi = df_ban.groupby(['Chi Nhánh Hệ Thống', 'Ngày_Chuan_Str'])['Tổng tiền'].sum().reset_index()
@@ -492,7 +426,7 @@ with tab3:
             st.rerun()
 
 # ==========================================
-# HÀM LÕI KÉO DỮ LIỆU FOOD COST (TÁI SỬ DỤNG CHO CÁC TAB 4, 5, 6)
+# HÀM LÕI KÉO DỮ LIỆU FOOD COST (TÁI SỬ DỤNG VÀ ÉP CHÌA KHÓA ĐỘNG)
 # ==========================================
 def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
     st.markdown(f"### 🧮 Quản Trị Tỷ Lệ % Nguyên Liệu (Food Cost) - {cn_mac_dinh}")
@@ -541,8 +475,10 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
         if cot_cn and cot_ngay and cot_gt:
             df_k_cn = df_k[df_k[cot_cn] == cn_doisoat].copy()
             df_k_cn['Date_Obj'] = pd.to_datetime(df_k_cn[cot_ngay], format='%d/%m/%Y', errors='coerce').dt.date
-            if df_k_cn['Date_Obj'].isna().all():
-                df_k_cn['Date_Obj'] = pd.to_datetime(df_k_cn[cot_ngay], errors='coerce').dt.date
+            mask_d = df_k_cn['Date_Obj'].isna()
+            if mask_d.any():
+                df_k_cn.loc[mask_d, 'Date_Obj'] = pd.to_datetime(df_k_cn.loc[mask_d, cot_ngay], errors='coerce', dayfirst=True).dt.date
+                
             df_k_cn[cot_gt] = df_k_cn[cot_gt].apply(clean_money)
             
             td_df = df_k_cn[df_k_cn['Date_Obj'] == start_date]
@@ -568,7 +504,10 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
                     dt_offline_default = dt_goi_y
                     st.caption(f"*(Hệ thống tự động lấp số: {dt_goi_y:,} đ từ báo cáo iPOS {cn_doisoat})*")
         
-        dt_offline = st.number_input("Chỉnh sửa Doanh thu Offline:", min_value=0, value=int(dt_offline_default), step=10000, key=f"dtoff_{prefix_key}")
+        # --- CHÌA KHÓA ĐỘNG (DYNAMIC KEY) GIÚP ĐỒNG BỘ GIAO DIỆN KHI ĐỔI NGÀY HOẶC CHI NHÁNH ---
+        dk = f"{prefix_key}_{cn_doisoat}_{start_date}_{end_date}_{int(ton_dau_auto)}_{int(ton_cuoi_auto)}_{int(dt_offline_default)}"
+        
+        dt_offline = st.number_input("Chỉnh sửa Doanh thu Offline:", min_value=0, value=int(dt_offline_default), step=10000, key=f"dtoff_{dk}")
 
     with col_dt2:
         st.write("**🛵 Doanh thu Online (ShopeeFood, Grab...)**")
@@ -604,11 +543,11 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
                         st.caption(f"*(Doanh thu Online hệ thống tìm thấy: {dt_online_tong:,} đ)*")
                         dt_online = dt_online_tong
                     else:
-                        dt_online = st.number_input("Nhập tay Doanh thu Online:", min_value=0, value=0, step=10000, key=f"dtonl_mn1_{prefix_key}")
+                        dt_online = st.number_input("Nhập tay Doanh thu Online:", min_value=0, value=0, step=10000, key=f"dtonl_mn1_{dk}")
             except Exception as e:
-                dt_online = st.number_input("Nhập tay Doanh thu Online:", min_value=0, value=0, step=10000, key=f"dtonl_err_{prefix_key}")
+                dt_online = st.number_input("Nhập tay Doanh thu Online:", min_value=0, value=0, step=10000, key=f"dtonl_err_{dk}")
         else:
-            dt_online = st.number_input("Nhập Doanh thu Online:", min_value=0, value=0, step=10000, key=f"dtonl_mn2_{prefix_key}")
+            dt_online = st.number_input("Nhập Doanh thu Online:", min_value=0, value=0, step=10000, key=f"dtonl_mn2_{dk}")
 
     tong_dt_hien_tai = dt_offline + dt_online
     st.write("")
@@ -623,11 +562,11 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
         
     col_k1, col_k2, col_k3 = st.columns(3)
     with col_k1:
-        ton_dau = st.number_input("📦 Tồn Đầu (VNĐ)", min_value=0, value=int(ton_dau_auto), step=100000, key=f"td_{prefix_key}")
+        ton_dau = st.number_input("📦 Tồn Đầu (VNĐ)", min_value=0, value=int(ton_dau_auto), step=100000, key=f"td_{dk}")
     with col_k2:
-        nhap_trong_ngay = st.number_input("🛒 Nhập Hàng (VNĐ)", min_value=0, value=0, step=100000, key=f"nhap_{prefix_key}")
+        nhap_trong_ngay = st.number_input("🛒 Nhập Hàng (VNĐ)", min_value=0, value=0, step=100000, key=f"nhap_{dk}")
     with col_k3:
-        ton_cuoi = st.number_input("📉 Tồn Cuối (VNĐ)", min_value=0, value=int(ton_cuoi_auto), step=100000, key=f"tc_{prefix_key}")
+        ton_cuoi = st.number_input("📉 Tồn Cuối (VNĐ)", min_value=0, value=int(ton_cuoi_auto), step=100000, key=f"tc_{dk}")
 
     if st.button(f"🧮 Báo Cáo % Nguyên Liệu {chuoi_hien_thi}", key=f"btn_bc_{prefix_key}"):
         tong_doanh_thu = dt_offline + dt_online
