@@ -1,0 +1,62 @@
+﻿STT,Nhóm món,Tên món,Giá Size S (k),Giá Size M (k),Giá Size L (k)
+1,BEST SELLER,Dưa Lưới Tứ Quý,35,44.0,51.0
+2,BEST SELLER,Trái Cây Nhiệt Đới,35,44.0,51.0
+3,BEST SELLER,Oolong Mơ Thanh Mai,35,44.0,51.0
+4,BEST SELLER,Matcha Latte Outside,35,44.0,51.0
+5,BEST SELLER,Trà Sữa Sốt Khoai Môn Tươi,35,44.0,51.0
+6,BEST SELLER,Trà Sữa Nguyên Lá Bánh Bò,32,41.0,48.0
+7,MÓN MỚI,Trà Me Đác Kim Quất,35,44.0,51.0
+8,MÓN MỚI,Sữa Tươi Trân Châu Bánh Bò,35,44.0,51.0
+9,MÓN MỚI,Matcha Sen Lài Dừa,35,44.0,51.0
+10,TRÀ TRÁI CÂY,Oolong Sen Nhãn Lá Nếp,35,44.0,51.0
+11,TRÀ TRÁI CÂY,Oolong Sen Nhãn,35,44.0,51.0
+12,TRÀ TRÁI CÂY,Trà Ổi Hồng Ngọc Trai,35,44.0,51.0
+13,TRÀ TRÁI CÂY,Trà Dứa Đác Rim,35,44.0,51.0
+14,TRÀ TRÁI CÂY,Trà Cam Dâu Đác,35,44.0,51.0
+15,TRÀ TRÁI CÂY,Trà Đào Cam Sả,35,44.0,51.0
+16,TRÀ TRÁI CÂY,Trà Vải Lài,35,44.0,51.0
+17,TRÀ TRÁI CÂY,Trà Đào,35,44.0,51.0
+18,TRÀ SỮA ĐẬM VỊ,Trà Sữa Truyền Thống Trân Châu,32,41.0,48.0
+19,TRÀ SỮA ĐẬM VỊ,Oolong Lài Sữa Trân Châu,32,41.0,48.0
+20,TRÀ SỮA ĐẬM VỊ,Trà Sữa Fulltopping,35,44.0,51.0
+21,TRÀ SỮA ĐẬM VỊ,Trà Sữa Hạnh Nhân Phomai,35,44.0,51.0
+22,TRÀ SỮA ĐẬM VỊ,Trà Sữa Kem Trứng Nướng,35,44.0,51.0
+23,TRÀ SỮA ĐẬM VỊ,TS Kem Trứng Oreo Trân Châu,35,44.0,51.0
+24,TRÀ SỮA ĐẬM VỊ,Sữa Tươi Trân Châu Đường Đen,35,44.0,51.0
+25,TRÀ SỮA ĐẬM VỊ,Trà Sữa Kem Trứng,35,44.0,51.0
+26,CÀ PHÊ,Cafe Đen Đá,22,31.0,38.0
+27,CÀ PHÊ,Cafe Sữa Đá,24,33.0,40.0
+28,CÀ PHÊ,Bạc Sỉu,28,37.0,44.0
+29,CÀ PHÊ,Cà Phê Muối,28,37.0,44.0
+30,CÀ PHÊ,Nước Cam Tươi,30,39.0,46.0
+31,CÀ PHÊ,Trà Tắc Xí Muội,30,39.0,46.0
+32,CÀ PHÊ,Trà Tắc Thái Xanh,30,39.0,46.0
+33,CÀ PHÊ,Cà Phê Phindi Caramel,35,44.0,51.0
+34,CÀ PHÊ,Cà Phê Phindi Hạnh Nhân,35,44.0,51.0
+35,MATCHA “REAL”,Matcha Coconut,35,44.0,51.0
+36,MATCHA “REAL”,Matcha Latte Sữa Gấu,35,44.0,51.0
+37,ĐÁ XAY & SỮA CHUA,Chocolate Đá Xay,35,44.0,51.0
+38,ĐÁ XAY & SỮA CHUA,Việt Quất Đá Xay,35,44.0,51.0
+39,ĐÁ XAY & SỮA CHUA,Matcha Đá Xay,35,44.0,51.0
+40,ĐÁ XAY & SỮA CHUA,Sữa Chua Dâu Tây,32,41.0,48.0
+41,ĐÁ XAY & SỮA CHUA,Sữa Chua Việt Quất,32,41.0,48.0
+42,ĐÁ XAY & SỮA CHUA,Sữa Chua Xoài Đác,35,44.0,51.0
+43,ĐỒ CHIÊN,Bò Viên Chiên (12 viên),19,28.0,35.0
+44,ĐỒ CHIÊN,Cá Viên Chiên (12 viên),19,28.0,35.0
+45,ĐỒ CHIÊN,Tôm Viên Chiên (12 viên),19,28.0,35.0
+46,ĐỒ CHIÊN,Hà Cao Chiên (10 viên),19,28.0,35.0
+47,ĐỒ CHIÊN,Phô Mai Que (2 cây),19,28.0,35.0
+48,ĐỒ CHIÊN,Hồ Lô Viên (8 viên),19,28.0,35.0
+49,ĐỒ CHIÊN,Xúc Xích Đức (2 cây),19,28.0,35.0
+50,ĐỒ CHIÊN,Khoai Tây Chiên (150gr),25,34.0,41.0
+51,ĐỒ CHIÊN,Khoai Tây Lắc Phô Mai (150gr),30,39.0,46.0
+52,TOPPING,Full Topping,9,,
+53,TOPPING,Khúc Bạch Phomai,7,,
+54,TOPPING,Trân Châu Ngọc Trai,7,,
+55,TOPPING,Trân Châu Đường Đen,7,,
+56,TOPPING,Trân Châu Bánh Bò,7,,
+57,TOPPING,Trái Vải,7,,
+58,TOPPING,Hạt Sen,7,,
+59,TOPPING,Đào Ngâm,7,,
+60,TOPPING,Pudding Trứng / Khoai Môn,7,,
+61,TOPPING,Thạch Cà Phê,7,,
