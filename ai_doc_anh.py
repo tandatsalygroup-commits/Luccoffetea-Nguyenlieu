@@ -187,7 +187,7 @@ with tab1:
             st.dataframe(df_kq_hien_thi, use_container_width=True)
 
 # ==========================================
-# TAB 2: PHÂN TÍCH BÁN HÀNG CHI TIẾT (ĐA CHI NHÁNH)
+# TAB 2: PHÂN TÍCH BÁN HÀNG CHI TIẾT (ĐA CHI NHÁNH & VÁ LỖI)
 # ==========================================
 with tab2:
     st.markdown("### 📈 Phân Tích Bán Hàng iPOS (Đa Chi Nhánh)")
@@ -229,7 +229,6 @@ with tab2:
                 else:
                     st.error(f"🔴 **{cn}**: Đang trống")
 
-    # Thu thập toàn bộ dữ liệu từ các khay
     df_ban_goc_list = []
     for cn in danh_sach_cn_he_thong:
         file_path = f"temp_ipos_{cn}.csv"
@@ -245,12 +244,20 @@ with tab2:
         df_ban['Tổng tiền'] = pd.to_numeric(df_ban['Tổng tiền'], errors='coerce').fillna(0)
         df_ban = df_ban[df_ban['Tổng tiền'] > 0]
         
-        # --- Lưu bộ nhớ Đa Chi Nhánh cho Tab 4 ---
-        if 'Thời gian' in df_ban.columns and 'Chi Nhánh Hệ Thống' in df_ban.columns:
-            df_daily_multi = df_ban.groupby(['Chi Nhánh Hệ Thống', 'Thời gian'])['Tổng tiền'].sum().reset_index()
+        # --- BỘ LỌC LÀM SẠCH NGÀY THÁNG ĐỂ VẼ BIỂU ĐỒ & ĐỒNG BỘ TAB 4 ---
+        time_col_master = next((c for c in df_ban.columns if 'thời gian' in str(c).lower() or 'ngày' in str(c).lower()), None)
+        if time_col_master:
+            # Cắt bỏ giờ phút, chỉ lấy ngày tháng năm
+            df_ban['Ngày_Chuan_Str'] = pd.to_datetime(df_ban[time_col_master], dayfirst=True, errors='coerce').dt.strftime('%d/%m/%Y')
+            mask = df_ban['Ngày_Chuan_Str'].isna()
+            if mask.any():
+                df_ban.loc[mask, 'Ngày_Chuan_Str'] = pd.to_datetime(df_ban.loc[mask, time_col_master], errors='coerce').dt.strftime('%d/%m/%Y')
+                 
+            # Lưu dữ liệu sạch cho Tab 4
+            df_daily_multi = df_ban.groupby(['Chi Nhánh Hệ Thống', 'Ngày_Chuan_Str'])['Tổng tiền'].sum().reset_index()
             dict_doanh_thu = {}
             for cn in df_daily_multi['Chi Nhánh Hệ Thống'].unique():
-                dict_doanh_thu[cn] = df_daily_multi[df_daily_multi['Chi Nhánh Hệ Thống'] == cn].set_index('Thời gian')['Tổng tiền'].to_dict()
+                dict_doanh_thu[cn] = df_daily_multi[df_daily_multi['Chi Nhánh Hệ Thống'] == cn].set_index('Ngày_Chuan_Str')['Tổng tiền'].to_dict()
             st.session_state['nhat_ky_doanh_thu_offline_multi'] = dict_doanh_thu
 
         st.write("---")
@@ -276,15 +283,14 @@ with tab2:
             col1.metric("🥤 Tổng Ly Bán Ra", f"{df_ban_view['Số lượng'].sum():,.0f} ly")
             col2.metric("💰 Tổng Doanh Thu", f"{df_ban_view['Tổng tiền'].sum():,.0f} VNĐ")
 
-            if 'Thời gian' in df_ban_view.columns:
+            # --- KHU VỰC VẼ BIỂU ĐỒ ĐÃ ĐƯỢC VÁ LỖI ---
+            if 'Ngày_Chuan_Str' in df_ban_view.columns:
                 st.write("---")
                 st.subheader("📈 1. Biểu Đồ Doanh Thu Theo Ngày")
-                df_trend = df_ban_view.groupby(['Thời gian', 'Chi Nhánh Hệ Thống'])['Tổng tiền'].sum().reset_index()
-                df_trend['_date_sort'] = pd.to_datetime(df_trend['Thời gian'], format='%d/%m/%Y', errors='coerce')
-                df_trend = df_trend.sort_values('_date_sort')
+                df_trend = df_ban_view.groupby(['Ngày_Chuan_Str', 'Chi Nhánh Hệ Thống'])['Tổng tiền'].sum().reset_index()
                 
                 if not df_trend.empty:
-                    df_pivot_trend = df_trend.pivot(index='Thời gian', columns='Chi Nhánh Hệ Thống', values='Tổng tiền').fillna(0)
+                    df_pivot_trend = df_trend.pivot(index='Ngày_Chuan_Str', columns='Chi Nhánh Hệ Thống', values='Tổng tiền').fillna(0)
                     df_pivot_trend.index = pd.to_datetime(df_pivot_trend.index, format='%d/%m/%Y', errors='coerce')
                     df_pivot_trend = df_pivot_trend.sort_index()
                     df_pivot_trend.index = df_pivot_trend.index.strftime('%d/%m/%Y')
@@ -293,8 +299,8 @@ with tab2:
             st.write("---")
             st.subheader("🔍 2. Bảng Xếp Hạng Món (Theo Size)")
             
-            if 'Thời gian' in df_ban_view.columns:
-                df_ban_view['Date_Obj'] = pd.to_datetime(df_ban_view['Thời gian'], format='%d/%m/%Y', errors='coerce').dt.date
+            if 'Ngày_Chuan_Str' in df_ban_view.columns:
+                df_ban_view['Date_Obj'] = pd.to_datetime(df_ban_view['Ngày_Chuan_Str'], format='%d/%m/%Y', errors='coerce').dt.date
                 min_date = df_ban_view['Date_Obj'].min()
                 max_date = df_ban_view['Date_Obj'].max()
                 
@@ -321,30 +327,48 @@ with tab2:
                 df_mon_hien_thi['Tổng tiền'] = df_mon_hien_thi['Tổng tiền'].apply(lambda x: f"{int(x):,} đ")
                 st.dataframe(df_mon_hien_thi, use_container_width=True)
 
-            if 'Số điện thoại' in df_ban_view.columns and 'Mã hoá đơn' in df_ban_view.columns:
+            # --- KHU VỰC PHÂN TÍCH KHÁCH HÀNG ĐÃ ĐƯỢC VÁ LỖI ---
+            phone_col = next((c for c in df_ban_view.columns if 'điện thoại' in str(c).lower() or 'sđt' in str(c).lower() or 'sdt' in str(c).lower()), None)
+            ma_hd_col = next((c for c in df_ban_view.columns if 'mã hoá đơn' in str(c).lower() or 'mã hóa đơn' in str(c).lower() or 'hóa đơn' in str(c).lower() or 'hoá đơn' in str(c).lower()), None)
+            name_col = next((c for c in df_ban_view.columns if 'tên khách' in str(c).lower() or 'khách hàng' in str(c).lower()), None)
+
+            if phone_col and ma_hd_col:
                 st.write("---")
                 st.subheader("🤝 3. Phân Tích Lượt Khách Quay Lại (SĐT)")
-                df_kh = df_ban_view.dropna(subset=['Số điện thoại']).copy()
-                df_kh_stats = df_kh.groupby('Số điện thoại').agg(
-                    So_Lan_Mua=('Mã hoá đơn', 'nunique'),
-                    Tong_Chi_Tieu=('Tổng tiền', 'sum'),
-                    Ten_Khach=('Tên khách', 'first')
-                ).reset_index()
                 
-                tong_kh = len(df_kh_stats)
-                kh_quay_lai = len(df_kh_stats[df_kh_stats['So_Lan_Mua'] > 1])
-                ty_le = (kh_quay_lai / tong_kh * 100) if tong_kh > 0 else 0
+                df_kh = df_ban_view.copy()
+                df_kh = df_kh.dropna(subset=[phone_col])
                 
-                c1, c2, c3 = st.columns(3)
-                c1.metric("👤 Số Khách Để Lại Info", f"{tong_kh} người")
-                c2.metric("🔄 Khách VIP (Quay Lại)", f"{kh_quay_lai} người")
-                c3.metric("🔥 Tỷ Lệ Giữ Chân Khách", f"{ty_le:.1f}%")
+                # Làm sạch triệt để: Chuyển sang text -> Cạo bỏ số thập phân -> Cạo bỏ chữ và ký tự lạ
+                df_kh[phone_col] = df_kh[phone_col].astype(str).str.replace(r'\.0$', '', regex=True)
+                df_kh[phone_col] = df_kh[phone_col].str.replace(r'[^\d]', '', regex=True)
                 
-                top_kh = df_kh_stats.sort_values(by='So_Lan_Mua', ascending=False).head(10)
-                top_kh.columns = ['Số Điện Thoại', 'Số Lần Mua', 'Tổng Chi Tiêu', 'Tên Khách Hàng']
-                top_kh_hien_thi = top_kh.copy()
-                top_kh_hien_thi['Tổng Chi Tiêu'] = top_kh_hien_thi['Tổng Chi Tiêu'].apply(lambda x: f"{int(x):,} đ")
-                st.dataframe(top_kh_hien_thi[['Tên Khách Hàng', 'Số Điện Thoại', 'Số Lần Mua', 'Tổng Chi Tiêu']], use_container_width=True)
+                # Chỉ lấy những dòng có số điện thoại từ 8 chữ số trở lên (Lọc các số rác)
+                df_kh = df_kh[df_kh[phone_col].str.len() >= 8]
+                
+                if not df_kh.empty:
+                    df_kh_stats = df_kh.groupby(phone_col).agg(
+                        So_Lan_Mua=(ma_hd_col, 'nunique'),
+                        Tong_Chi_Tieu=('Tổng tiền', 'sum'),
+                        Ten_Khach=(name_col if name_col else phone_col, 'first')
+                    ).reset_index()
+                    
+                    tong_kh = len(df_kh_stats)
+                    kh_quay_lai = len(df_kh_stats[df_kh_stats['So_Lan_Mua'] > 1])
+                    ty_le = (kh_quay_lai / tong_kh * 100) if tong_kh > 0 else 0
+                    
+                    c1, c2, c3 = st.columns(3)
+                    c1.metric("👤 Số Khách Để Lại Info", f"{tong_kh} người")
+                    c2.metric("🔄 Khách VIP (Quay Lại)", f"{kh_quay_lai} người")
+                    c3.metric("🔥 Tỷ Lệ Giữ Chân Khách", f"{ty_le:.1f}%")
+                    
+                    top_kh = df_kh_stats.sort_values(by='So_Lan_Mua', ascending=False).head(10)
+                    top_kh.columns = ['Số Điện Thoại', 'Số Lần Mua', 'Tổng Chi Tiêu', 'Tên Khách Hàng']
+                    top_kh_hien_thi = top_kh.copy()
+                    top_kh_hien_thi['Tổng Chi Tiêu'] = top_kh_hien_thi['Tổng Chi Tiêu'].apply(lambda x: f"{int(x):,} đ")
+                    st.dataframe(top_kh_hien_thi[['Tên Khách Hàng', 'Số Điện Thoại', 'Số Lần Mua', 'Tổng Chi Tiêu']], use_container_width=True)
+                else:
+                    st.info("⚠️ Không tìm thấy dữ liệu số điện thoại hợp lệ trong file báo cáo.")
 
 # ==========================================
 # TAB 3: QUẢN LÝ MENU GỐC
@@ -390,7 +414,6 @@ with tab4:
     with col_filter2:
         cn_doisoat = st.selectbox("🏢 Chọn Chi nhánh để đối chiếu Tồn Kho & Doanh Thu:", options=danh_sach_cn_he_thong)
 
-    # LẤY TỒN KHO TỰ ĐỘNG TỪ TAB 1
     ton_dau_auto = 0
     ton_cuoi_auto = 0
     
@@ -423,7 +446,6 @@ with tab4:
         st.write("**💵 Doanh thu Offline (tại chỗ)**")
         dt_offline_default = 0
         
-        # Lấy doanh thu offline TỰ ĐỘNG TỪ TAB 2 dựa theo chi nhánh
         if 'nhat_ky_doanh_thu_offline_multi' in st.session_state:
             nhat_ky_tong = st.session_state['nhat_ky_doanh_thu_offline_multi']
             if cn_doisoat in nhat_ky_tong:
