@@ -6,21 +6,112 @@ import re
 import datetime
 
 # ==========================================
-# CẤU HÌNH TRANG & GIAO DIỆN (UI/UX)
+# CẤU HÌNH TRANG & GIAO DIỆN (UI/UX) ĐÃ NÂNG CẤP
 # ==========================================
 st.set_page_config(page_title="Hệ Thống Quản Trị F&B", layout="wide", page_icon="📊")
 
 st.markdown("""
 <style>
-    .stApp { background-color: #FAFAFA; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    h1, h2, h3 { color: #4A4036 !important; font-weight: 600 !important; }
-    .stTabs [data-baseweb="tab-list"] { gap: 8px; padding-bottom: 5px; flex-wrap: wrap; }
-    .stTabs [data-baseweb="tab"] { background-color: #F0EAE1; border-radius: 8px 8px 0px 0px; padding: 10px 15px; color: #6B5E53; font-weight: 500; border: none; font-size: 14px; }
-    .stTabs [aria-selected="true"] { background-color: #E2D4C6 !important; color: #4A4036 !important; font-weight: bold; border-bottom: 3px solid #C4A484 !important; }
-    div[data-testid="metric-container"] { background-color: #FFFFFF; border: 1px solid #EAEAEA; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-    .stButton>button { background-color: #4A4036; color: #FFFFFF; border-radius: 6px; border: none; transition: all 0.3s; }
-    .stButton>button:hover { background-color: #6B5E53; color: #FFFFFF; }
-    .stDataFrame { border-radius: 8px; overflow: hidden; border: 1px solid #EAEAEA; }
+    /* 1. NỀN TRANG: Tông màu kem pastel sáng, kèm họa tiết chấm bi chìm cực mờ */
+    .stApp { 
+        background-color: #FDFBF7; 
+        background-image: radial-gradient(#EFEBE5 1px, transparent 1px);
+        background-size: 20px 20px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+    }
+    
+    /* 2. CHỮ & TIÊU ĐỀ: Tông nâu gỗ sang trọng */
+    h1, h2, h3, h4, h5 { 
+        color: #5C4D42 !important; 
+        font-weight: 600 !important; 
+        letter-spacing: 0.5px;
+    }
+    
+    /* 3. ĐƯỜNG KẺ NGANG (LINE): Hiệu ứng mờ dần về 2 đầu */
+    hr {
+        border: 0;
+        height: 1px;
+        background-image: linear-gradient(to right, rgba(196, 164, 132, 0), rgba(196, 164, 132, 0.6), rgba(196, 164, 132, 0));
+        margin: 2em 0;
+    }
+    
+    /* 4. TABS MENU: Bo góc mềm, đổi màu hover */
+    .stTabs [data-baseweb="tab-list"] { 
+        gap: 10px; 
+        padding-bottom: 5px; 
+        border-bottom: 1px solid #EAEAEA;
+        flex-wrap: wrap;
+    }
+    .stTabs [data-baseweb="tab"] { 
+        background-color: #F5EFEB; 
+        border-radius: 8px 8px 0px 0px; 
+        padding: 10px 20px; 
+        color: #8C7B6D; 
+        font-weight: 500; 
+        border: none; 
+        transition: all 0.3s ease;
+        font-size: 15px;
+    }
+    .stTabs [data-baseweb="tab"]:hover {
+        background-color: #EAE0D5;
+        color: #5C4D42;
+    }
+    .stTabs [aria-selected="true"] { 
+        background-color: #FFFFFF !important; 
+        color: #4A4036 !important; 
+        font-weight: 700; 
+        border-bottom: 3px solid #D2B48C !important; 
+        box-shadow: 0 -3px 5px rgba(0,0,0,0.01);
+    }
+    
+    /* 5. METRICS (CÁC CON SỐ THỐNG KÊ): Hiệu ứng thẻ Card có điểm nhấn viền trái */
+    div[data-testid="metric-container"] { 
+        background-color: #FFFFFF; 
+        border: 1px solid #F0F0F0; 
+        border-left: 4px solid #C4A484; /* Điểm nhấn viền màu cafe sữa */
+        padding: 20px; 
+        border-radius: 10px; 
+        box-shadow: 0 4px 15px rgba(0,0,0,0.03); 
+        transition: transform 0.2s ease;
+    }
+    div[data-testid="metric-container"]:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0,0,0,0.06); 
+    }
+    
+    /* 6. NÚT BẤM (BUTTONS) */
+    .stButton>button { 
+        background-color: #6B5E53; 
+        color: #FFFFFF; 
+        border-radius: 6px; 
+        border: none; 
+        padding: 0.5rem 1rem;
+        font-weight: 500;
+        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        box-shadow: 0 2px 4px rgba(107, 94, 83, 0.2);
+    }
+    .stButton>button:hover { 
+        background-color: #4A4036; 
+        color: #FFFFFF; 
+        box-shadow: 0 4px 8px rgba(74, 64, 54, 0.3);
+    }
+    
+    /* 7. BẢNG DỮ LIỆU (DATAFRAME) */
+    .stDataFrame { 
+        border-radius: 10px; 
+        overflow: hidden; 
+        border: 1px solid #EAEAEA; 
+        box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+    }
+    
+    /* 8. KHUNG EXPANDER (Mở rộng/Thu gọn) */
+    .streamlit-expanderHeader {
+        background-color: #FFFFFF;
+        border-radius: 8px;
+        border: 1px solid #EAEAEA;
+        color: #5C4D42;
+        font-weight: 500;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -376,6 +467,8 @@ with tab2:
                     top_kh_hien_thi = top_kh.copy()
                     top_kh_hien_thi['Tổng Chi Tiêu'] = top_kh_hien_thi['Tổng Chi Tiêu'].apply(lambda x: f"{int(x):,} đ")
                     st.dataframe(top_kh_hien_thi[['Tên Khách Hàng', 'Số Điện Thoại', 'Số Lần Mua', 'Tổng Chi Tiêu']], use_container_width=True)
+                else:
+                    st.info("⚠️ Không tìm thấy dữ liệu số điện thoại hợp lệ trong file báo cáo.")
 
 # ==========================================
 # TAB 3: QUẢN LÝ MENU GỐC
@@ -426,7 +519,6 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
             if cot_cn_t1:
                 danh_sach_cn_tab = st.session_state['df_kho_goc'][cot_cn_t1].dropna().unique().tolist()
         
-        # Luôn ưu tiên đưa chi nhánh mặc định của Tab đó lên đầu tiên
         if cn_mac_dinh in danh_sach_cn_tab:
             danh_sach_cn_tab.remove(cn_mac_dinh)
             danh_sach_cn_tab.insert(0, cn_mac_dinh)
@@ -561,7 +653,7 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
                 c3.metric("🎯 Tỷ lệ %", f"{phan_tram_nl:.1f} %", "Báo Động Hụt Kho (>40%)", delta_color="inverse")
 
 # ==========================================
-# KHỞI TẠO TAB 4, 5, 6
+# KHỞI TẠO TAB 4, 5, 6 TỰ ĐỘNG THEO TỪNG CHI NHÁNH
 # ==========================================
 with tab4:
     render_food_cost_tab("Trường Sa", "TS", "Lục_TS")
