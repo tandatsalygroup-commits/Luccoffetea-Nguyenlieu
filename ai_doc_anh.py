@@ -51,7 +51,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# HÀM KÉO DỮ LIỆU GOOGLE SHEET VÀ LÀM SẠCH SỐ TIỀN
+# HÀM KÉO DỮ LIỆU GOOGLE SHEET VÀ LÀM SẠCH
 # ==========================================
 def clean_money(val):
     if pd.isna(val): return 0
@@ -70,10 +70,22 @@ def doc_du_lieu_gg_sheet(link, ten_tab, refresh_trigger=0):
     xlsx_url = f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=xlsx"
     return pd.read_excel(xlsx_url, sheet_name=ten_tab)
 
+def clean_date_robust(date_series):
+    """Hàm bọc thép xử lý đủ mọi loại định dạng ngày tháng lệch lạc từ Excel"""
+    # Ép về datetime chuẩn, ưu tiên định dạng d/m/y (ngày/tháng/năm của VN)
+    cleaned = pd.to_datetime(date_series, format='%d/%m/%Y', errors='coerce')
+    mask_na = cleaned.isna()
+    if mask_na.any():
+        # Nếu có lỗi, dùng cơ chế tự đoán của Pandas, ưu tiên ngày trước tháng
+        cleaned.loc[mask_na] = pd.to_datetime(date_series.loc[mask_na], errors='coerce', dayfirst=True)
+    
+    # Cuối cùng, gọt sạch giờ/phút/giây, chỉ lấy đúng ngày
+    return cleaned.dt.normalize()
+
 danh_sach_cn_he_thong = ["Trường Sa", "Lê Quang Định", "Trần Huy Liệu"]
 
 # ==========================================
-# THANH SIDEBAR TỰ ĐỘNG ĐỒNG BỘ 3 CHI NHÁNH TỪ 1 LINK TỔNG
+# THANH SIDEBAR TỰ ĐỘNG ĐỒNG BỘ 3 CHI NHÁNH
 # ==========================================
 st.sidebar.markdown("### ⚙️ CẤU HÌNH ĐỐI SOÁT ONLINE")
 st.sidebar.info("Thiết lập Link 1 lần duy nhất ở đây. Bấm nút dưới để hệ thống kéo toàn bộ dữ liệu về chạy cục bộ siêu tốc.")
@@ -94,7 +106,6 @@ if st.sidebar.button("🚀 LƯU & CẬP NHẬT ĐỒNG LOẠT", use_container_wi
                     file_id = re.search(r'/d/([a-zA-Z0-9-_]+)', global_onl_link).group(1)
                     xlsx_url = f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=xlsx"
                     
-                    # Quét thông minh: Tìm dòng có chứa cột 'Theo Ngày'
                     df_onl = pd.read_excel(xlsx_url, sheet_name=tab_name)
                     cols_lower = [str(c).lower().strip() for c in df_onl.columns]
                     
@@ -527,7 +538,7 @@ with tab3:
             st.rerun()
 
 # ==========================================
-# HÀM LÕI KÉO DỮ LIỆU FOOD COST (VÁ LỖI DATE COMPARISON)
+# HÀM LÕI KÉO DỮ LIỆU FOOD COST (TÙY CHỌN CỘT VỚI MẶC ĐỊNH & SỬA LỖI NGÀY)
 # ==========================================
 def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
     st.markdown(f"### 🧮 Quản Trị Tỷ Lệ % Nguyên Liệu (Food Cost) - {cn_mac_dinh}")
@@ -575,17 +586,18 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
         
         if cot_cn and cot_ngay and cot_gt:
             df_k_cn = df_k[df_k[cot_cn] == cn_doisoat].copy()
-            df_k_cn['Date_Obj'] = pd.to_datetime(df_k_cn[cot_ngay], format='%d/%m/%Y', errors='coerce').dt.date
-            mask_d = df_k_cn['Date_Obj'].isna()
-            if mask_d.any():
-                df_k_cn.loc[mask_d, 'Date_Obj'] = pd.to_datetime(df_k_cn.loc[mask_d, cot_ngay], errors='coerce', dayfirst=True).dt.date
+            df_k_cn['Date_Obj'] = clean_date_robust(df_k_cn[cot_ngay])
                 
             df_k_cn[cot_gt] = df_k_cn[cot_gt].apply(clean_money)
             
-            td_df = df_k_cn[df_k_cn['Date_Obj'] == start_date]
+            # Ép kiểu cho start_date và end_date để so sánh
+            start_ts = pd.to_datetime(start_date)
+            end_ts = pd.to_datetime(end_date)
+            
+            td_df = df_k_cn[df_k_cn['Date_Obj'] == start_ts]
             if not td_df.empty: ton_dau_auto = td_df[cot_gt].sum()
                 
-            ngay_hom_sau = end_date + datetime.timedelta(days=1)
+            ngay_hom_sau = end_ts + datetime.timedelta(days=1)
             tc_df = df_k_cn[df_k_cn['Date_Obj'] == ngay_hom_sau]
             if not tc_df.empty: ton_cuoi_auto = tc_df[cot_gt].sum()
 
@@ -615,15 +627,15 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
         dt_online = 0
         file_onl = f"temp_onl_{cn_mac_dinh}.csv"
         
+        # --- ĐỌC FILE CỤC BỘ & HIỂN THỊ DROPDOWN CHỌN CỘT ---
         if os.path.exists(file_onl):
             try:
                 df_onl = pd.read_csv(file_onl)
-                # Xóa khoảng trắng thừa ở tên cột
-                df_onl.columns = [str(c).strip() for c in df_onl.columns] 
+                df_onl.columns = [str(c).strip() for c in df_onl.columns] # Làm sạch khoảng trắng
                 
                 cols_onl = ["Không chọn"] + df_onl.columns.tolist()
                 
-                # Tự động chọn sẵn Cột theo chuẩn nếu có
+                # Tự động ưu tiên chọn các cột quy chuẩn
                 idx_ngay = cols_onl.index("Theo Ngày") if "Theo Ngày" in cols_onl else 0
                 idx_doanhthu = cols_onl.index("Tổng Doanh Thu") if "Tổng Doanh Thu" in cols_onl else 0
                 
@@ -632,21 +644,13 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
                 with c2_onl: cot_dt_onl = st.selectbox("Cột Doanh Thu:", options=cols_onl, index=idx_doanhthu, key=f"coldt_{prefix_key}")
                 
                 if cot_ngay_onl != "Không chọn" and cot_dt_onl != "Không chọn":
-                    # --- BỘ LỌC NGÀY THÁNG BỌC THÉP (SỬA LỖI INVALID COMPARISON) ---
-                    # 1. Ép kiểu cột Ngày từ CSV về chuẩn Timestamp
-                    df_onl['Ngay_Chuan'] = pd.to_datetime(df_onl[cot_ngay_onl], format='%d/%m/%Y', errors='coerce')
-                    mask_na = df_onl['Ngay_Chuan'].isna()
-                    if mask_na.any():
-                        df_onl.loc[mask_na, 'Ngay_Chuan'] = pd.to_datetime(df_onl.loc[mask_na, cot_ngay_onl], errors='coerce', dayfirst=True)
+                    # --- BỘ LỌC NGÀY THÁNG BỌC THÉP TỪ HÀM ---
+                    df_onl['Ngay_Chuan'] = clean_date_robust(df_onl[cot_ngay_onl])
                     
-                    # Cắt bỏ giờ phút, chỉ lấy ngày
-                    df_onl['Ngay_Chuan'] = df_onl['Ngay_Chuan'].dt.normalize()
-                    
-                    # 2. Ép kiểu ngày từ bộ chọn Lịch về chuẩn Timestamp để khớp hoàn toàn với CSV
                     start_ts = pd.to_datetime(start_date)
                     end_ts = pd.to_datetime(end_date)
                     
-                    # 3. Lọc số liệu
+                    # Lọc số liệu chuẩn xác
                     df_onl_ngay = df_onl[(df_onl['Ngay_Chuan'] >= start_ts) & (df_onl['Ngay_Chuan'] <= end_ts)].copy()
                     
                     if not df_onl_ngay.empty:
@@ -657,7 +661,7 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
                     else:
                         st.info("Không có đơn Online trong ngày này.")
             except Exception as e:
-                st.error(f"❌ Lỗi đọc dữ liệu cục bộ: Vui lòng xem lại file Excel.")
+                st.error(f"❌ Lỗi đọc dữ liệu cục bộ: {e}")
         else:
             st.warning("⚠️ Chưa có dữ liệu Online. Vui lòng bấm 'LƯU & CẬP NHẬT ĐỒNG LOẠT' ở menu bên trái.")
             
