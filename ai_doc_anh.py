@@ -51,7 +51,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# HÀM KÉO DỮ LIỆU GOOGLE SHEET
+# HÀM KÉO DỮ LIỆU GOOGLE SHEET VÀ LÀM SẠCH SỐ TIỀN
 # ==========================================
 def clean_money(val):
     if pd.isna(val): return 0
@@ -73,7 +73,7 @@ def doc_du_lieu_gg_sheet(link, ten_tab, refresh_trigger=0):
 danh_sach_cn_he_thong = ["Trường Sa", "Lê Quang Định", "Trần Huy Liệu"]
 
 # ==========================================
-# THANH SIDEBAR TỰ ĐỘNG ĐỒNG BỘ 3 CHI NHÁNH
+# THANH SIDEBAR TỰ ĐỘNG ĐỒNG BỘ 3 CHI NHÁNH TỪ 1 LINK TỔNG
 # ==========================================
 st.sidebar.markdown("### ⚙️ CẤU HÌNH ĐỐI SOÁT ONLINE")
 st.sidebar.info("Thiết lập Link 1 lần duy nhất ở đây. Bấm nút dưới để hệ thống kéo toàn bộ dữ liệu về chạy cục bộ siêu tốc.")
@@ -87,15 +87,28 @@ if st.sidebar.button("🚀 LƯU & CẬP NHẬT ĐỒNG LOẠT", use_container_wi
         app_config["online_master"]["link"] = global_onl_link
         save_config(app_config)
         
-        with st.spinner("⏳ Đang kéo dữ liệu từ mây cho 3 chi nhánh (Chỉ đợi 1 lần duy nhất)..."):
+        with st.spinner("⏳ Đang quét tiêu đề và kéo dữ liệu từ mây cho 3 chi nhánh..."):
             for cn_mac_dinh, def_tab in [("Trường Sa", "Lục_TS"), ("Lê Quang Định", "Lục_LQD"), ("Trần Huy Liệu", "Lục_THL")]:
+                tab_name = app_config.get("food_cost", {}).get(cn_mac_dinh, {}).get("tab", def_tab)
                 try:
-                    df_onl = doc_du_lieu_gg_sheet(global_onl_link, def_tab, time.time()) # Ép tải lại
+                    file_id = re.search(r'/d/([a-zA-Z0-9-_]+)', global_onl_link).group(1)
+                    xlsx_url = f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=xlsx"
+                    
+                    # Quét thông minh: Tìm dòng có chứa cột 'Theo Ngày'
+                    df_onl = pd.read_excel(xlsx_url, sheet_name=tab_name)
+                    cols_lower = [str(c).lower().strip() for c in df_onl.columns]
+                    
+                    if not any('theo ngày' in c for c in cols_lower):
+                        df_onl = pd.read_excel(xlsx_url, sheet_name=tab_name, header=1)
+                        cols_lower = [str(c).lower().strip() for c in df_onl.columns]
+                        if not any('theo ngày' in c for c in cols_lower):
+                            df_onl = pd.read_excel(xlsx_url, sheet_name=tab_name, header=2)
+                            
                     df_onl.to_csv(f"temp_onl_{cn_mac_dinh}.csv", index=False)
                 except Exception as e:
-                    st.sidebar.error(f"❌ Lỗi tải {cn_mac_dinh} (Sheet {def_tab}): Không tìm thấy hoặc link sai.")
+                    st.sidebar.error(f"❌ Lỗi tải {cn_mac_dinh} (Sheet {tab_name}): Không tìm thấy hoặc link sai.")
                     
-        st.sidebar.success("✅ Đã lấy số xong! Các Tab hiện tại đã chạy mượt mà.")
+        st.sidebar.success("✅ Đã lấy số xong! Các Tab hiện tại đã có dữ liệu chuẩn xác.")
         st.rerun()
     else:
         st.sidebar.warning("⚠️ Vui lòng nhập link trước khi đồng bộ.")
@@ -514,7 +527,7 @@ with tab3:
             st.rerun()
 
 # ==========================================
-# HÀM LÕI KÉO DỮ LIỆU FOOD COST (TÙY CHỌN CỘT VỚI MẶC ĐỊNH & SỬA LỖI NGÀY)
+# HÀM LÕI KÉO DỮ LIỆU FOOD COST (VÁ LỖI DATE COMPARISON)
 # ==========================================
 def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
     st.markdown(f"### 🧮 Quản Trị Tỷ Lệ % Nguyên Liệu (Food Cost) - {cn_mac_dinh}")
@@ -602,15 +615,15 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
         dt_online = 0
         file_onl = f"temp_onl_{cn_mac_dinh}.csv"
         
-        # --- ĐỌC FILE CỤC BỘ & HIỂN THỊ DROPDOWN CHỌN CỘT ---
         if os.path.exists(file_onl):
             try:
                 df_onl = pd.read_csv(file_onl)
-                df_onl.columns = [str(c).strip() for c in df_onl.columns] # Làm sạch khoảng trắng
+                # Xóa khoảng trắng thừa ở tên cột
+                df_onl.columns = [str(c).strip() for c in df_onl.columns] 
                 
                 cols_onl = ["Không chọn"] + df_onl.columns.tolist()
                 
-                # Tự động ưu tiên chọn các cột quy chuẩn
+                # Tự động chọn sẵn Cột theo chuẩn nếu có
                 idx_ngay = cols_onl.index("Theo Ngày") if "Theo Ngày" in cols_onl else 0
                 idx_doanhthu = cols_onl.index("Tổng Doanh Thu") if "Tổng Doanh Thu" in cols_onl else 0
                 
@@ -619,11 +632,21 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
                 with c2_onl: cot_dt_onl = st.selectbox("Cột Doanh Thu:", options=cols_onl, index=idx_doanhthu, key=f"coldt_{prefix_key}")
                 
                 if cot_ngay_onl != "Không chọn" and cot_dt_onl != "Không chọn":
-                    # Khắc phục triệt để lỗi "Invalid comparison between dtype=datetime64[s] and date"
-                    df_onl['Ngay_Chuan'] = pd.to_datetime(df_onl[cot_ngay_onl], dayfirst=True, errors='coerce').dt.normalize()
-                    start_ts = pd.Timestamp(start_date)
-                    end_ts = pd.Timestamp(end_date)
+                    # --- BỘ LỌC NGÀY THÁNG BỌC THÉP (SỬA LỖI INVALID COMPARISON) ---
+                    # 1. Ép kiểu cột Ngày từ CSV về chuẩn Timestamp
+                    df_onl['Ngay_Chuan'] = pd.to_datetime(df_onl[cot_ngay_onl], format='%d/%m/%Y', errors='coerce')
+                    mask_na = df_onl['Ngay_Chuan'].isna()
+                    if mask_na.any():
+                        df_onl.loc[mask_na, 'Ngay_Chuan'] = pd.to_datetime(df_onl.loc[mask_na, cot_ngay_onl], errors='coerce', dayfirst=True)
                     
+                    # Cắt bỏ giờ phút, chỉ lấy ngày
+                    df_onl['Ngay_Chuan'] = df_onl['Ngay_Chuan'].dt.normalize()
+                    
+                    # 2. Ép kiểu ngày từ bộ chọn Lịch về chuẩn Timestamp để khớp hoàn toàn với CSV
+                    start_ts = pd.to_datetime(start_date)
+                    end_ts = pd.to_datetime(end_date)
+                    
+                    # 3. Lọc số liệu
                     df_onl_ngay = df_onl[(df_onl['Ngay_Chuan'] >= start_ts) & (df_onl['Ngay_Chuan'] <= end_ts)].copy()
                     
                     if not df_onl_ngay.empty:
@@ -634,7 +657,7 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
                     else:
                         st.info("Không có đơn Online trong ngày này.")
             except Exception as e:
-                st.error(f"❌ Lỗi đọc dữ liệu cục bộ: {e}")
+                st.error(f"❌ Lỗi đọc dữ liệu cục bộ: Vui lòng xem lại file Excel.")
         else:
             st.warning("⚠️ Chưa có dữ liệu Online. Vui lòng bấm 'LƯU & CẬP NHẬT ĐỒNG LOẠT' ở menu bên trái.")
             
