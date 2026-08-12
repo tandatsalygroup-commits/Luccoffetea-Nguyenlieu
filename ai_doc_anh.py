@@ -49,6 +49,27 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ==========================================
+# CẤU HÌNH THANH SIDEBAR (CẬP NHẬT ĐỒNG LOẠT ONLINE)
+# ==========================================
+if "refresh_onl" not in st.session_state: st.session_state["refresh_onl"] = 0
+
+st.sidebar.markdown("### ⚙️ CẤU HÌNH ĐỐI SOÁT ONLINE")
+st.sidebar.info("Thiết lập Link 1 lần ở đây, áp dụng cho cả 3 chi nhánh Trường Sa, Lê Quang Định, Trần Huy Liệu.")
+
+def_onl_link = app_config.get("online_master", {}).get("link", "")
+global_onl_link = st.sidebar.text_input("🔗 Link Google Sheet (Tổng):", value=def_onl_link, key="global_onl_link")
+
+if st.sidebar.button("🚀 LƯU & CẬP NHẬT ĐỒNG LOẠT", use_container_width=True):
+    if "online_master" not in app_config: app_config["online_master"] = {}
+    app_config["online_master"]["link"] = global_onl_link
+    save_config(app_config)
+    st.session_state["refresh_onl"] += 1
+    # Xóa cache để ép tải lại toàn bộ
+    st.cache_data.clear()
+    st.sidebar.success("✅ Đã kích hoạt làm mới toàn hệ thống!")
+    st.rerun()
+
 st.title("📊 Hệ Thống Bóc Tách & Phân Tích Dữ Liệu F&B")
 
 # ==========================================
@@ -73,13 +94,6 @@ def doc_du_lieu_gg_sheet(link, ten_tab, refresh_trigger=0):
 
 danh_sach_cn_he_thong = ["Trường Sa", "Lê Quang Định", "Trần Huy Liệu"]
 
-# --- HÀM TÌM CỘT TỰ ĐỘNG ---
-def auto_select_col(columns_list, target_keywords):
-    for i, col in enumerate(columns_list):
-        if any(keyword in str(col).lower() for keyword in target_keywords):
-            return i + 1  # +1 vì option đầu tiên là "Không chọn"
-    return 0
-
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "📦 Xử Lý Tồn Kho", 
     "📈 Bán Hàng iPOS", 
@@ -91,7 +105,6 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 
 if "refresh_kho" not in st.session_state: st.session_state["refresh_kho"] = 0
 if "refresh_ipos" not in st.session_state: st.session_state["refresh_ipos"] = {cn: 0 for cn in danh_sach_cn_he_thong}
-if "refresh_onl" not in st.session_state: st.session_state["refresh_onl"] = 0
 
 # ==========================================
 # TAB 1: XỬ LÝ TỒN KHO 
@@ -267,11 +280,7 @@ with tab2:
                 save_config(app_config)
                 
                 if link_ipos:
-                    tabs_map = {
-                        "Trường Sa": tab_ts, 
-                        "Lê Quang Định": tab_lqd, 
-                        "Trần Huy Liệu": tab_thl
-                    }
+                    tabs_map = {"Trường Sa": tab_ts, "Lê Quang Định": tab_lqd, "Trần Huy Liệu": tab_thl}
                     
                     with st.spinner("⏳ Hệ thống đang quét và đồng bộ dữ liệu iPOS của cả 3 chi nhánh từ mây..."):
                         for cn_upload, tab_name in tabs_map.items():
@@ -501,27 +510,12 @@ with tab3:
             st.rerun()
 
 # ==========================================
-# CẤU HÌNH DOANH THU ONLINE CHUNG CHO TAB 4, 5, 6
-# ==========================================
-st.sidebar.markdown("### ⚙️ CẤU HÌNH LINK ĐỐI SOÁT ONLINE")
-st.sidebar.info("Cập nhật 1 lần dùng chung cho tất cả các Chi nhánh.")
-def_onl_link = app_config.get("online_master", {}).get("link", "")
-global_onl_link = st.sidebar.text_input("🔗 Link Google Sheet (Doanh Thu Online):", value=def_onl_link, key="global_onl_link")
-if st.sidebar.button("💾 Lưu Link Online", use_container_width=True):
-    if "online_master" not in app_config: app_config["online_master"] = {}
-    app_config["online_master"]["link"] = global_onl_link
-    save_config(app_config)
-    st.sidebar.success("✅ Đã lưu!")
-
-# ==========================================
-# HÀM LÕI KÉO DỮ LIỆU FOOD COST (TỰ ĐỘNG CHỌN CỘT)
+# HÀM LÕI KÉO DỮ LIỆU FOOD COST (ĐÃ KHÓA CỘT MẶC ĐỊNH & ẨN NÚT SYNC CÁ THỂ)
 # ==========================================
 def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
     st.markdown(f"### 🧮 Quản Trị Tỷ Lệ % Nguyên Liệu (Food Cost) - {cn_mac_dinh}")
     st.info("Hệ thống tự động lấp dữ liệu Tồn Kho (Tab 1) và Doanh Thu iPOS (Tab 2) dựa theo chi nhánh được chọn.")
     
-    if f"refresh_{prefix_key}" not in st.session_state: st.session_state[f"refresh_{prefix_key}"] = 0
-        
     col_filter1, col_filter2 = st.columns(2)
     with col_filter1:
         today = datetime.date.today()
@@ -599,36 +593,29 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
 
     with col_dt2:
         st.write("**🛵 Doanh thu Online (ShopeeFood, Grab...)**")
-        st.caption("*(Link nguồn đã được cấu hình chung ở Sidebar bên trái)*")
+        st.caption("*(Link nguồn & Cập nhật tự động nằm ở Sidebar bên trái)*")
         
         def_fc_tab = app_config.get("food_cost", {}).get(cn_mac_dinh, {}).get("tab", default_tab_sheet)
+        ten_tab = st.text_input(f"📌 Tên Tab Sheet của {cn_mac_dinh}:", value=def_fc_tab, key=f"tabsheet_{prefix_key}") 
         
-        col_tab, col_btn = st.columns([2, 1])
-        with col_tab:
-            ten_tab = st.text_input(f"📌 Tên Tab Sheet của {cn_mac_dinh}:", value=def_fc_tab, key=f"tabsheet_{prefix_key}") 
-        with col_btn:
-            st.write("")
-            st.write("")
-            if st.button("🔄 Lấy Số Online", key=f"btn_capnhat_{prefix_key}"):
-                if "food_cost" not in app_config: app_config["food_cost"] = {}
-                if cn_mac_dinh not in app_config["food_cost"]: app_config["food_cost"][cn_mac_dinh] = {}
-                app_config["food_cost"][cn_mac_dinh]["tab"] = ten_tab
-                save_config(app_config)
-                st.session_state["refresh_onl"] += 1
+        # Tự động lưu tên tab khi có sự thay đổi
+        if ten_tab != def_fc_tab:
+            if "food_cost" not in app_config: app_config["food_cost"] = {}
+            if cn_mac_dinh not in app_config["food_cost"]: app_config["food_cost"][cn_mac_dinh] = {}
+            app_config["food_cost"][cn_mac_dinh]["tab"] = ten_tab
+            save_config(app_config)
             
         dt_online = 0
         link_gg_sheet = app_config.get("online_master", {}).get("link", "")
         
         if link_gg_sheet:
             try:
-                with st.spinner(f"⏳ Đang tải doanh thu Online {cn_mac_dinh}..."):
-                    df_onl = doc_du_lieu_gg_sheet(link_gg_sheet, ten_tab, st.session_state["refresh_onl"])
-                
+                df_onl = doc_du_lieu_gg_sheet(link_gg_sheet, ten_tab, st.session_state["refresh_onl"])
                 cols_onl = ["Không chọn"] + df_onl.columns.tolist()
                 
-                # --- AI TỰ ĐỘNG CHỌN CỘT ---
-                idx_ngay = auto_select_col(cols_onl, ["theo ngày", "ngày", "date"])
-                idx_doanhthu = auto_select_col(cols_onl, ["tổng doanh thu", "doanh thu", "tổng tiền", "revenue"])
+                # Ép chặt Cột Mặc Định theo chuẩn của chuỗi Lục Coffee
+                idx_ngay = cols_onl.index("Theo Ngày") if "Theo Ngày" in cols_onl else 0
+                idx_doanhthu = cols_onl.index("Tổng Doanh Thu") if "Tổng Doanh Thu" in cols_onl else 0
                 
                 c1_onl, c2_onl = st.columns(2)
                 with c1_onl: cot_ngay_onl = st.selectbox("Cột Ngày:", options=cols_onl, index=idx_ngay, key=f"colngay_{prefix_key}")
