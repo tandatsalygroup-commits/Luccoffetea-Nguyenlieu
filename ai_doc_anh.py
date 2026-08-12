@@ -5,6 +5,7 @@ import os
 import re
 import datetime
 import json
+import time
 
 # ==========================================
 # BỘ NHỚ LƯU TRỮ LINK GOOGLE SHEET (JSON)
@@ -50,24 +51,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# CẤU HÌNH THANH SIDEBAR (LƯU LINK CHUNG - KHÔNG ĐỒNG BỘ ÉP BUỘC)
-# ==========================================
-st.sidebar.markdown("### ⚙️ CẤU HÌNH ĐỐI SOÁT ONLINE")
-st.sidebar.info("Thiết lập Link 1 lần ở đây, áp dụng cho cả 3 chi nhánh Trường Sa, Lê Quang Định, Trần Huy Liệu.")
-
-def_onl_link = app_config.get("online_master", {}).get("link", "")
-global_onl_link = st.sidebar.text_input("🔗 Link Google Sheet (Tổng):", value=def_onl_link, key="global_onl_link")
-
-if st.sidebar.button("🚀 LƯU & ÁP DỤNG LINK", use_container_width=True):
-    if "online_master" not in app_config: app_config["online_master"] = {}
-    app_config["online_master"]["link"] = global_onl_link
-    save_config(app_config)
-    st.sidebar.success("✅ Đã lưu! Các Tab sẽ tự dùng link này khi cần.")
-
-st.title("📊 Hệ Thống Bóc Tách & Phân Tích Dữ Liệu F&B")
-
-# ==========================================
-# HÀM HỖ TRỢ XỬ LÝ TIỀN TỆ & ĐỌC DỮ LIỆU TỐI ƯU HÓA CACHE
+# HÀM ĐỌC DỮ LIỆU TỪ GOOGLE SHEET
 # ==========================================
 def clean_money(val):
     if pd.isna(val): return 0
@@ -80,13 +64,45 @@ def clean_money(val):
         if val_str == '': return 0
         return int(val_str)
 
-@st.cache_data(ttl=900, show_spinner=False)
+@st.cache_data(ttl=600, show_spinner=False)
 def doc_du_lieu_gg_sheet(link, ten_tab, refresh_trigger=0):
     file_id = re.search(r'/d/([a-zA-Z0-9-_]+)', link).group(1)
     xlsx_url = f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=xlsx"
     return pd.read_excel(xlsx_url, sheet_name=ten_tab)
 
 danh_sach_cn_he_thong = ["Trường Sa", "Lê Quang Định", "Trần Huy Liệu"]
+
+# ==========================================
+# CẤU HÌNH THANH SIDEBAR (ĐỒNG BỘ ONLINE CẢ 3 CHI NHÁNH TỐC ĐỘ CAO)
+# ==========================================
+st.sidebar.markdown("### ⚙️ CẤU HÌNH ĐỐI SOÁT ONLINE")
+st.sidebar.info("Thiết lập Link 1 lần ở đây. Bấm nút dưới để hệ thống kéo số về lưu trữ siêu tốc.")
+
+def_onl_link = app_config.get("online_master", {}).get("link", "")
+global_onl_link = st.sidebar.text_input("🔗 Link Google Sheet (Tổng):", value=def_onl_link, key="global_onl_link")
+
+if st.sidebar.button("🚀 LƯU & CẬP NHẬT ĐỒNG LOẠT", use_container_width=True):
+    if "online_master" not in app_config: app_config["online_master"] = {}
+    app_config["online_master"]["link"] = global_onl_link
+    save_config(app_config)
+    
+    if global_onl_link:
+        with st.spinner("⏳ Đang kéo dữ liệu từ mây cho 3 chi nhánh (Chỉ đợi 1 lần duy nhất)..."):
+            # Lặp qua 3 chi nhánh để lấy số và lưu thành file tĩnh
+            for cn_mac_dinh, def_tab in [("Trường Sa", "Lục_TS"), ("Lê Quang Định", "Lục_LQD"), ("Trần Huy Liệu", "Lục_THL")]:
+                tab_name = app_config.get("food_cost", {}).get(cn_mac_dinh, {}).get("tab", def_tab)
+                try:
+                    # Ép hệ thống bỏ qua Cache bằng time.time() để luôn lấy số mới nhất khi bấm nút này
+                    df_onl = doc_du_lieu_gg_sheet(global_onl_link, tab_name, time.time())
+                    # Lưu file tĩnh cục bộ
+                    df_onl.to_csv(f"temp_onl_{cn_mac_dinh}.csv", index=False)
+                except Exception as e:
+                    st.sidebar.error(f"Lỗi tải {cn_mac_dinh}: Tab không tồn tại hoặc lỗi mạng.")
+                    
+        st.sidebar.success("✅ Đã lấy số xong! Các Tab hiện tại đã chạy mượt mà.")
+        st.rerun()
+
+st.title("📊 Hệ Thống Bóc Tách & Phân Tích Dữ Liệu F&B")
 
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "📦 Xử Lý Tồn Kho", 
@@ -148,10 +164,8 @@ with tab1:
         else:
             file_kho = st.file_uploader("Tải file Tồn Kho lên đây", type=['xlsx', 'xls', 'csv'], key="kho")
             if file_kho is not None:
-                if file_kho.name.endswith('.csv'):
-                    df_kho_goc = pd.read_csv(file_kho)
-                else:
-                    df_kho_goc = pd.read_excel(file_kho)
+                if file_kho.name.endswith('.csv'): df_kho_goc = pd.read_csv(file_kho)
+                else: df_kho_goc = pd.read_excel(file_kho)
                 df_kho_goc.to_csv("temp_kho.csv", index=False)
                 st.rerun()
 
@@ -255,7 +269,6 @@ with tab2:
         
         if loai_nguon_ipos == "🔗 Liên kết Google Sheet (Lưu Vĩnh Viễn)":
             st.write("**1. Cấu hình nguồn dữ liệu iPOS chung cho toàn hệ thống**")
-            
             def_ipos_link = app_config.get("ipos_master", {}).get("link", "")
             link_ipos = st.text_input("🔗 Link Google Sheet (Dùng chung cho cả 3 chi nhánh):", value=def_ipos_link)
             
@@ -275,7 +288,6 @@ with tab2:
                 
                 if link_ipos:
                     tabs_map = {"Trường Sa": tab_ts, "Lê Quang Định": tab_lqd, "Trần Huy Liệu": tab_thl}
-                    
                     with st.spinner("⏳ Hệ thống đang quét và đồng bộ dữ liệu iPOS của cả 3 chi nhánh từ mây..."):
                         for cn_upload, tab_name in tabs_map.items():
                             try:
@@ -504,14 +516,11 @@ with tab3:
             st.rerun()
 
 # ==========================================
-# HÀM LÕI KÉO DỮ LIỆU FOOD COST (TỐI ƯU CỘT MẶC ĐỊNH & LAZY LOAD)
+# HÀM LÕI KÉO DỮ LIỆU FOOD COST (VỚI CƠ CHẾ ĐỌC FILE LOCAL SIÊU TỐC)
 # ==========================================
 def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
     st.markdown(f"### 🧮 Quản Trị Tỷ Lệ % Nguyên Liệu (Food Cost) - {cn_mac_dinh}")
     st.info("Hệ thống tự động lấp dữ liệu Tồn Kho (Tab 1) và Doanh Thu iPOS (Tab 2) dựa theo chi nhánh được chọn.")
-    
-    # Tạo biến trigger độc lập cho tab này để xử lý Lazy Loading
-    if f"refresh_{prefix_key}" not in st.session_state: st.session_state[f"refresh_{prefix_key}"] = 0
         
     col_filter1, col_filter2 = st.columns(2)
     with col_filter1:
@@ -590,7 +599,7 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
 
     with col_dt2:
         st.write("**🛵 Doanh thu Online (ShopeeFood, Grab...)**")
-        st.caption("*(Link nguồn đã được cấu hình chung ở Sidebar bên trái)*")
+        st.caption("*(Dữ liệu được quản lý tự động từ Sidebar bên trái)*")
         
         def_fc_tab = app_config.get("food_cost", {}).get(cn_mac_dinh, {}).get("tab", default_tab_sheet)
         
@@ -600,22 +609,32 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
         with col_btn:
             st.write("")
             st.write("")
-            if st.button("🔄 Lấy Số Online", key=f"btn_capnhat_{prefix_key}"):
+            if st.button("🔄 Lấy Số Online Cục Bộ", key=f"btn_capnhat_{prefix_key}"):
                 if "food_cost" not in app_config: app_config["food_cost"] = {}
                 if cn_mac_dinh not in app_config["food_cost"]: app_config["food_cost"][cn_mac_dinh] = {}
                 app_config["food_cost"][cn_mac_dinh]["tab"] = ten_tab
                 save_config(app_config)
-                st.session_state[f"refresh_{prefix_key}"] += 1
+                
+                link_gg_sheet = app_config.get("online_master", {}).get("link", "")
+                if link_gg_sheet:
+                    try:
+                        with st.spinner(f"⏳ Đang kéo dữ liệu từ mây cho {cn_mac_dinh}..."):
+                            df_onl = doc_du_lieu_gg_sheet(link_gg_sheet, ten_tab, time.time())
+                            df_onl.to_csv(f"temp_onl_{cn_mac_dinh}.csv", index=False)
+                        st.success("✅ Tải xong!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Lỗi: {e}")
+                else:
+                    st.warning("Vui lòng cấu hình Link ở Sidebar trước!")
             
         dt_online = 0
-        link_gg_sheet = app_config.get("online_master", {}).get("link", "")
+        file_onl = f"temp_onl_{cn_mac_dinh}.csv"
         
-        if link_gg_sheet:
+        # Đọc dữ liệu SIÊU NHANH từ tệp csv được lưu tĩnh trong ổ cứng của Streamlit
+        if os.path.exists(file_onl):
             try:
-                with st.spinner(f"⏳ Đang tải doanh thu Online {cn_mac_dinh}..."):
-                    # Chỉ gọi load data khi Tab này đang được kích hoạt và bấm Lấy Số Online
-                    df_onl = doc_du_lieu_gg_sheet(link_gg_sheet, ten_tab, st.session_state[f"refresh_{prefix_key}"])
-                
+                df_onl = pd.read_csv(file_onl)
                 cols_onl = ["Không chọn"] + df_onl.columns.tolist()
                 
                 # --- ÉP CỨNG CHỌN CỘT MẶC ĐỊNH CHO LỤC COFFEE ---
@@ -640,6 +659,7 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
             except Exception as e:
                 dt_online = st.number_input("Nhập tay Doanh thu Online:", min_value=0, value=0, step=10000, key=f"dtonl_err_{dk}")
         else:
+            st.caption("*(Chưa có dữ liệu, hãy bấm 'Lưu & Cập Nhật' ở Menu trái)*")
             dt_online = st.number_input("Nhập Doanh thu Online:", min_value=0, value=0, step=10000, key=f"dtonl_mn2_{dk}")
 
     tong_dt_hien_tai = dt_offline + dt_online
