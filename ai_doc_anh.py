@@ -12,33 +12,17 @@ st.set_page_config(page_title="Hệ Thống Quản Trị F&B", layout="wide", pa
 
 st.markdown("""
 <style>
-    /* NỀN TRANG VÀ FONT */
-    .stApp { 
-        background-color: #FDFBF7; 
-        background-image: radial-gradient(#EFEBE5 1px, transparent 1px);
-        background-size: 20px 20px;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-    }
-    
-    /* CHỮ & TIÊU ĐỀ */
+    .stApp { background-color: #FDFBF7; background-image: radial-gradient(#EFEBE5 1px, transparent 1px); background-size: 20px 20px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     h1, h2, h3, h4, h5 { color: #5C4D42 !important; font-weight: 600 !important; letter-spacing: 0.5px; }
     hr { border: 0; height: 1px; background-image: linear-gradient(to right, rgba(196, 164, 132, 0), rgba(196, 164, 132, 0.6), rgba(196, 164, 132, 0)); margin: 2em 0; }
-    
-    /* TABS MENU */
     .stTabs [data-baseweb="tab-list"] { gap: 10px; padding-bottom: 5px; border-bottom: 1px solid #EAEAEA; flex-wrap: wrap; }
     .stTabs [data-baseweb="tab"] { background-color: #F5EFEB; border-radius: 8px 8px 0px 0px; padding: 10px 20px; color: #8C7B6D; font-weight: 500; border: none; transition: all 0.3s ease; font-size: 15px; }
     .stTabs [data-baseweb="tab"]:hover { background-color: #EAE0D5; color: #5C4D42; }
     .stTabs [aria-selected="true"] { background-color: #FFFFFF !important; color: #4A4036 !important; font-weight: 700; border-bottom: 3px solid #D2B48C !important; box-shadow: 0 -3px 5px rgba(0,0,0,0.01); }
-    
-    /* METRICS (SỐ LIỆU) */
     div[data-testid="metric-container"] { background-color: #FFFFFF; border: 1px solid #F0F0F0; border-left: 4px solid #C4A484; padding: 20px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); transition: transform 0.2s ease; }
     div[data-testid="metric-container"]:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.06); }
-    
-    /* BUTTONS */
     .stButton>button { background-color: #6B5E53; color: #FFFFFF; border-radius: 6px; border: none; padding: 0.5rem 1rem; font-weight: 500; transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); box-shadow: 0 2px 4px rgba(107, 94, 83, 0.2); }
     .stButton>button:hover { background-color: #4A4036; color: #FFFFFF; box-shadow: 0 4px 8px rgba(74, 64, 54, 0.3); }
-    
-    /* DATAFRAME */
     .stDataFrame { border-radius: 10px; overflow: hidden; border: 1px solid #EAEAEA; box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
     .streamlit-expanderHeader { background-color: #FFFFFF; border-radius: 8px; border: 1px solid #EAEAEA; color: #5C4D42; font-weight: 500; }
 </style>
@@ -82,7 +66,7 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 # ==========================================
 with tab1:
     st.markdown("### 📦 Quản Lý Dữ Liệu Tồn Kho")
-    st.info("Dữ liệu sau khi tải lên sẽ được hệ thống lưu lại tạm thời. Anh có thể F5 thoải mái mà không sợ mất số liệu.")
+    st.info("Sử dụng Google Sheet để lưu trữ dữ liệu vĩnh viễn trên mây.")
     
     loai_nguon_kho = st.radio("Nguồn cấp dữ liệu Tồn Kho:", 
                               options=["🔗 Liên kết Google Sheet (Dữ liệu nền AppSheet)", "📁 Tải file (Excel/CSV) thủ công"], horizontal=True)
@@ -98,7 +82,7 @@ with tab1:
         with col_btn:
             st.write("") 
             st.write("")
-            if st.button("🔄 Lấy Dữ Liệu"):
+            if st.button("🔄 Lấy Dữ Liệu", key="btn_kho_sync"):
                 doc_du_lieu_gg_sheet.clear()
             
         if link_appsheet:
@@ -149,18 +133,16 @@ with tab1:
             date_cols = [c for c in df_kho.columns if 'ngày' in c.lower() or 'date' in c.lower() or 'thời gian' in c.lower()]
             if date_cols:
                 date_col = date_cols[0]
-                # Xử lý ngày tháng chuyên sâu
                 df_kho['_temp_date'] = pd.to_datetime(df_kho[date_col], format='%d/%m/%Y', errors='coerce')
-                mask_k = df_kho['_temp_date'].isna()
-                if mask_k.any():
-                    df_kho.loc[mask_k, '_temp_date'] = pd.to_datetime(df_kho.loc[mask_k, date_col], errors='coerce', dayfirst=True)
+                if df_kho['_temp_date'].isna().all():
+                    df_kho['_temp_date'] = pd.to_datetime(df_kho[date_col], errors='coerce')
                 
                 df_kho['_temp_date_obj'] = df_kho['_temp_date'].dt.date
                 min_date = df_kho['_temp_date_obj'].min()
                 max_date = df_kho['_temp_date_obj'].max()
                 
                 if pd.notnull(min_date) and pd.notnull(max_date):
-                    ngay_loc = st.date_input(f"🗓️ Lọc khoảng thời gian ({date_col}):", value=(min_date, max_date), min_value=min_date, max_value=max_date)
+                    ngay_loc = st.date_input(f"🗓️ Lọc khoảng thời gian ({date_col}):", value=(min_date, max_date), min_value=min_date, max_value=max_date, key="date_kho")
                     if isinstance(ngay_loc, tuple):
                         start_d = ngay_loc[0]
                         end_d = ngay_loc[1] if len(ngay_loc) > 1 else start_d
@@ -214,52 +196,86 @@ with tab1:
             st.dataframe(df_kq_hien_thi, use_container_width=True)
 
 # ==========================================
-# TAB 2: PHÂN TÍCH BÁN HÀNG CHI TIẾT 
+# TAB 2: PHÂN TÍCH BÁN HÀNG CHI TIẾT (TÍCH HỢP GOOGLE SHEET LƯU VĨNH VIỄN)
 # ==========================================
 with tab2:
     st.markdown("### 📈 Phân Tích Bán Hàng iPOS (Đa Chi Nhánh)")
-    st.info("Quản lý báo cáo iPOS cho từng chi nhánh độc lập. Hệ thống sẽ kết nối tự động với Tab NL.")
+    st.info("Sử dụng Google Sheet để đảm bảo dữ liệu bán hàng được lưu trữ vĩnh viễn, không bị mất khi ứng dụng khởi động lại.")
     
     with st.expander("📥 QUẢN LÝ DỮ LIỆU IPOS TỪNG CHI NHÁNH", expanded=True):
+        loai_nguon_ipos = st.radio("Cấp dữ liệu báo cáo iPOS bằng cách:", 
+                                   options=["🔗 Liên kết Google Sheet (Lưu Vĩnh Viễn)", "📁 Tải file thủ công (Bị mất khi qua ngày)"], horizontal=True)
+        
         col_up1, col_up2 = st.columns([1, 2])
         with col_up1:
-            cn_upload = st.selectbox("1. Chọn chi nhánh cần cập nhật file:", options=danh_sach_cn_he_thong)
+            cn_upload = st.selectbox("1. Chọn chi nhánh cần cập nhật:", options=danh_sach_cn_he_thong)
+        
         with col_up2:
-            file_ipos = st.file_uploader(f"2. Tải báo cáo iPOS của {cn_upload}", type=['xlsx', 'xls', 'csv'], key="upload_ipos")
-            if file_ipos is not None:
-                try:
-                    if file_ipos.name.endswith('.csv'):
-                        df_new = pd.read_csv(file_ipos)
-                    else:
-                        df_new = pd.read_excel(file_ipos)
-                        if 'Tên hàng' not in df_new.columns and len(df_new) > 0:
-                            df_new = pd.read_excel(file_ipos, header=1)
+            if loai_nguon_ipos == "🔗 Liên kết Google Sheet (Lưu Vĩnh Viễn)":
+                st.write(f"**2. Kết nối báo cáo iPOS của {cn_upload}**")
+                link_ipos = st.text_input("🔗 Link Google Sheet (iPOS):", key=f"link_ipos_{cn_upload}")
+                tab_ipos = st.text_input("📌 Tên Tab Sheet:", value=f"iPOS_{cn_upload}", key=f"tab_ipos_{cn_upload}")
+                
+                if st.button(f"🔄 Lấy Dữ Liệu {cn_upload}"):
+                    if link_ipos:
+                        try:
+                            with st.spinner("Đang tải dữ liệu từ mây..."):
+                                df_new = doc_du_lieu_gg_sheet(link_ipos, tab_ipos)
+                                # Tìm header chuẩn của iPOS (có cột Tên hàng)
+                                if 'Tên hàng' not in df_new.columns and len(df_new) > 0:
+                                    df_new = doc_du_lieu_gg_sheet.clear() # Xóa cache thử lại
+                                    df_new = pd.read_excel(f"https://docs.google.com/spreadsheets/d/{re.search(r'/d/([a-zA-Z0-9-_]+)', link_ipos).group(1)}/export?format=xlsx", sheet_name=tab_ipos, header=1)
+                                    if 'Tên hàng' not in df_new.columns and len(df_new) > 0:
+                                        df_new = pd.read_excel(f"https://docs.google.com/spreadsheets/d/{re.search(r'/d/([a-zA-Z0-9-_]+)', link_ipos).group(1)}/export?format=xlsx", sheet_name=tab_ipos, header=2)
+                                
+                                if cn_upload == "Lê Quang Định" and "Nguồn" in df_new.columns:
+                                    cac_nguon_hop_le = ['mang về', 'mang ve', 'tại chỗ', 'tại chổ', 'tai cho', 'tại cho', 'tai chỗ']
+                                    df_new = df_new[df_new['Nguồn'].astype(str).str.strip().str.lower().isin(cac_nguon_hop_le)]
+                                
+                                if df_new.empty:
+                                    st.error("❌ Dữ liệu trống!")
+                                else:
+                                    df_new['Chi Nhánh Hệ Thống'] = cn_upload
+                                    df_new.to_csv(f"temp_ipos_{cn_upload}.csv", index=False)
+                                    st.success(f"✅ Đã kéo và lưu dữ liệu {cn_upload}!")
+                                    st.rerun()
+                        except Exception as e:
+                            st.error(f"❌ Lỗi: {e}")
+            else:
+                file_ipos = st.file_uploader(f"2. Tải báo cáo iPOS của {cn_upload}", type=['xlsx', 'xls', 'csv'], key="upload_ipos")
+                if file_ipos is not None:
+                    try:
+                        if file_ipos.name.endswith('.csv'): df_new = pd.read_csv(file_ipos)
+                        else:
+                            df_new = pd.read_excel(file_ipos)
                             if 'Tên hàng' not in df_new.columns and len(df_new) > 0:
-                                df_new = pd.read_excel(file_ipos, header=2)
-                    
-                    if cn_upload == "Lê Quang Định" and "Nguồn" in df_new.columns:
-                        cac_nguon_hop_le = ['mang về', 'mang ve', 'tại chỗ', 'tại chổ', 'tai cho', 'tại cho', 'tai chỗ']
-                        df_new = df_new[df_new['Nguồn'].astype(str).str.strip().str.lower().isin(cac_nguon_hop_le)]
-                    
-                    if df_new.empty:
-                        st.error(f"❌ Dữ liệu trống! (Có thể do file rỗng hoặc sau khi lọc không còn đơn Offline nào hợp lệ).")
-                    else:
-                        df_new['Chi Nhánh Hệ Thống'] = cn_upload
-                        df_new.to_csv(f"temp_ipos_{cn_upload}.csv", index=False)
-                        st.success(f"✅ Đã lưu và làm sạch dữ liệu cho chi nhánh {cn_upload}!")
-                        st.rerun()
-                except Exception as e:
-                    st.error(f"❌ Lỗi đọc file: {e}")
+                                df_new = pd.read_excel(file_ipos, header=1)
+                                if 'Tên hàng' not in df_new.columns and len(df_new) > 0:
+                                    df_new = pd.read_excel(file_ipos, header=2)
+                        
+                        if cn_upload == "Lê Quang Định" and "Nguồn" in df_new.columns:
+                            cac_nguon_hop_le = ['mang về', 'mang ve', 'tại chỗ', 'tại chổ', 'tai cho', 'tại cho', 'tai chỗ']
+                            df_new = df_new[df_new['Nguồn'].astype(str).str.strip().str.lower().isin(cac_nguon_hop_le)]
+                        
+                        if df_new.empty:
+                            st.error(f"❌ Dữ liệu trống!")
+                        else:
+                            df_new['Chi Nhánh Hệ Thống'] = cn_upload
+                            df_new.to_csv(f"temp_ipos_{cn_upload}.csv", index=False)
+                            st.success(f"✅ Đã lưu dữ liệu cho {cn_upload}!")
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"❌ Lỗi đọc file: {e}")
                     
         st.write("---")
-        st.write("**🗄️ Trạng thái khay dữ liệu hiện tại:**")
+        st.write("**🗄️ Trạng thái bộ nhớ tạm hiện tại:**")
         cols_status = st.columns(3)
         for i, cn in enumerate(danh_sach_cn_he_thong):
             file_path = f"temp_ipos_{cn}.csv"
             with cols_status[i]:
                 if os.path.exists(file_path):
                     st.success(f"🟢 **{cn}**: Có dữ liệu")
-                    if st.button(f"🗑️ Xóa file {cn}", key=f"del_{cn}"):
+                    if st.button(f"🗑️ Xóa bộ nhớ {cn}", key=f"del_{cn}"):
                         os.remove(file_path)
                         st.rerun()
                 else:
@@ -276,10 +292,8 @@ with tab2:
                         df_ban_goc_list.append(df_temp)
                 else:
                     os.remove(file_path) 
-            except pd.errors.EmptyDataError:
+            except Exception:
                 os.remove(file_path) 
-            except Exception as e:
-                pass
             
     if df_ban_goc_list:
         df_ban_master = pd.concat(df_ban_goc_list, ignore_index=True)
@@ -290,7 +304,6 @@ with tab2:
         df_ban['Tổng tiền'] = pd.to_numeric(df_ban['Tổng tiền'], errors='coerce').fillna(0)
         df_ban = df_ban[df_ban['Tổng tiền'] > 0]
         
-        # --- BỘ LỌC XỬ LÝ NGÀY THÁNG ĐƯỢC NÂNG CẤP ĐỂ ĐỒNG BỘ ---
         time_col_master = next((c for c in df_ban.columns if 'thời gian' in str(c).lower() or 'ngày' in str(c).lower()), None)
         if time_col_master:
             df_ban['Date_Obj'] = pd.to_datetime(df_ban[time_col_master], format='%d/%m/%Y', errors='coerce').dt.date
@@ -324,7 +337,7 @@ with tab2:
             df_ban_view['Tên món gốc'] = df_ban_view['Tên hàng'].apply(extract_base_name)
 
             st.write("---")
-            st.subheader("🏆 TỔNG QUAN KINH DOANH (CÁC CHI NHÁNH ĐƯỢC CHỌN)")
+            st.subheader("🏆 TỔNG QUAN KINH DOANH")
             col1, col2 = st.columns(2)
             col1.metric("🥤 Tổng Ly Bán Ra", f"{df_ban_view['Số lượng'].sum():,.0f} ly")
             col2.metric("💰 Tổng Doanh Thu", f"{df_ban_view['Tổng tiền'].sum():,.0f} VNĐ")
@@ -345,7 +358,7 @@ with tab2:
                 min_date = df_ban_view['Date_Obj'].dropna().min()
                 max_date = df_ban_view['Date_Obj'].dropna().max()
                 if pd.notnull(min_date) and pd.notnull(max_date):
-                    ngay_loc_mon = st.date_input("🗓️ Lọc xếp hạng món theo ngày:", value=(min_date, max_date), min_value=min_date, max_value=max_date)
+                    ngay_loc_mon = st.date_input("🗓️ Lọc xếp hạng món theo ngày:", value=(min_date, max_date), min_value=min_date, max_value=max_date, key="date_mon")
                     if isinstance(ngay_loc_mon, tuple):
                         start_d = ngay_loc_mon[0]
                         end_d = ngay_loc_mon[1] if len(ngay_loc_mon) > 1 else start_d
@@ -392,17 +405,15 @@ with tab2:
                     ty_le = (kh_quay_lai / tong_kh * 100) if tong_kh > 0 else 0
                     
                     c1, c2, c3 = st.columns(3)
-                    c1.metric("👤 Số Khách Để Lại Info", f"{tong_kh} người")
+                    c1.metric("👤 Số Khách Info", f"{tong_kh} người")
                     c2.metric("🔄 Khách VIP (Quay Lại)", f"{kh_quay_lai} người")
-                    c3.metric("🔥 Tỷ Lệ Giữ Chân Khách", f"{ty_le:.1f}%")
+                    c3.metric("🔥 Tỷ Lệ Giữ Chân", f"{ty_le:.1f}%")
                     
                     top_kh = df_kh_stats.sort_values(by='So_Lan_Mua', ascending=False).head(10)
                     top_kh.columns = ['Số Điện Thoại', 'Số Lần Mua', 'Tổng Chi Tiêu', 'Tên Khách Hàng']
                     top_kh_hien_thi = top_kh.copy()
                     top_kh_hien_thi['Tổng Chi Tiêu'] = top_kh_hien_thi['Tổng Chi Tiêu'].apply(lambda x: f"{int(x):,} đ")
                     st.dataframe(top_kh_hien_thi[['Tên Khách Hàng', 'Số Điện Thoại', 'Số Lần Mua', 'Tổng Chi Tiêu']], use_container_width=True)
-                else:
-                    st.info("⚠️ Không tìm thấy dữ liệu số điện thoại hợp lệ trong file báo cáo.")
 
 # ==========================================
 # TAB 3: QUẢN LÝ MENU GỐC
@@ -426,7 +437,7 @@ with tab3:
             st.rerun()
 
 # ==========================================
-# HÀM LÕI KÉO DỮ LIỆU FOOD COST (TÁI SỬ DỤNG VÀ ÉP CHÌA KHÓA ĐỘNG)
+# HÀM LÕI KÉO DỮ LIỆU FOOD COST
 # ==========================================
 def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
     st.markdown(f"### 🧮 Quản Trị Tỷ Lệ % Nguyên Liệu (Food Cost) - {cn_mac_dinh}")
@@ -459,7 +470,7 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
         else:
             danh_sach_cn_tab.insert(0, cn_mac_dinh)
             
-        cn_doisoat = st.selectbox("🏢 Chọn Chi nhánh để đối chiếu Tồn Kho & Doanh Thu:", options=danh_sach_cn_tab, key=f"cn_{prefix_key}")
+        cn_doisoat = st.selectbox("🏢 Chọn Chi nhánh đối chiếu:", options=danh_sach_cn_tab, key=f"cn_{prefix_key}")
 
     ton_dau_auto = 0
     ton_cuoi_auto = 0
@@ -502,15 +513,13 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
                 dt_goi_y = sum([int(nhat_ky_cn.get(d, 0)) for d in date_list])
                 if dt_goi_y > 0:
                     dt_offline_default = dt_goi_y
-                    st.caption(f"*(Hệ thống tự động lấp số: {dt_goi_y:,} đ từ báo cáo iPOS {cn_doisoat})*")
+                    st.caption(f"*(Hệ thống tự động lấp số: {dt_goi_y:,} đ từ iPOS)*")
         
-        # --- CHÌA KHÓA ĐỘNG (DYNAMIC KEY) GIÚP ĐỒNG BỘ GIAO DIỆN KHI ĐỔI NGÀY HOẶC CHI NHÁNH ---
         dk = f"{prefix_key}_{cn_doisoat}_{start_date}_{end_date}_{int(ton_dau_auto)}_{int(ton_cuoi_auto)}_{int(dt_offline_default)}"
-        
         dt_offline = st.number_input("Chỉnh sửa Doanh thu Offline:", min_value=0, value=int(dt_offline_default), step=10000, key=f"dtoff_{dk}")
 
     with col_dt2:
-        st.write("**🛵 Doanh thu Online (ShopeeFood, Grab...)**")
+        st.write("**🛵 Doanh thu Online (ShopeeFood...)**")
         link_gg_sheet = st.text_input("🔗 Link đối soát (Google Sheet):", key=f"link_{prefix_key}")
         
         col_tab, col_btn = st.columns([2, 1])
@@ -526,12 +535,9 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
         if link_gg_sheet:
             try:
                 df_onl = doc_du_lieu_gg_sheet(link_gg_sheet, ten_tab)
-                
                 c1_onl, c2_onl = st.columns(2)
-                with c1_onl:
-                    cot_ngay_onl = st.selectbox("Cột Ngày:", options=["Không chọn"] + df_onl.columns.tolist(), key=f"colngay_{prefix_key}")
-                with c2_onl:
-                    cot_dt_onl = st.selectbox("Cột Doanh Thu:", options=["Không chọn"] + df_onl.columns.tolist(), key=f"coldt_{prefix_key}")
+                with c1_onl: cot_ngay_onl = st.selectbox("Cột Ngày:", options=["Không chọn"] + df_onl.columns.tolist(), key=f"colngay_{prefix_key}")
+                with c2_onl: cot_dt_onl = st.selectbox("Cột Doanh Thu:", options=["Không chọn"] + df_onl.columns.tolist(), key=f"coldt_{prefix_key}")
                 
                 if cot_ngay_onl != "Không chọn" and cot_dt_onl != "Không chọn":
                     df_onl['Ngay_Chuan'] = pd.to_datetime(df_onl[cot_ngay_onl], dayfirst=True, errors='coerce').dt.date
@@ -540,7 +546,7 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
                     if not df_onl_ngay.empty:
                         df_onl_ngay[cot_dt_onl] = df_onl_ngay[cot_dt_onl].apply(clean_money)
                         dt_online_tong = int(df_onl_ngay[cot_dt_onl].sum())
-                        st.caption(f"*(Doanh thu Online hệ thống tìm thấy: {dt_online_tong:,} đ)*")
+                        st.caption(f"*(Online tìm thấy: {dt_online_tong:,} đ)*")
                         dt_online = dt_online_tong
                     else:
                         dt_online = st.number_input("Nhập tay Doanh thu Online:", min_value=0, value=0, step=10000, key=f"dtonl_mn1_{dk}")
@@ -592,13 +598,8 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
                 c3.metric("🎯 Tỷ lệ %", f"{phan_tram_nl:.1f} %", "Báo Động Hụt Kho (>40%)", delta_color="inverse")
 
 # ==========================================
-# KHỞI TẠO TAB 4, 5, 6 TỰ ĐỘNG THEO TỪNG CHI NHÁNH
+# KHỞI TẠO TAB 4, 5, 6
 # ==========================================
-with tab4:
-    render_food_cost_tab("Trường Sa", "TS", "Lục_TS")
-    
-with tab5:
-    render_food_cost_tab("Trần Huy Liệu", "THL", "Lục_THL")
-
-with tab6:
-    render_food_cost_tab("Lê Quang Định", "LQD", "Lục_LQD")
+with tab4: render_food_cost_tab("Trường Sa", "TS", "Lục_TS")
+with tab5: render_food_cost_tab("Trần Huy Liệu", "THL", "Lục_THL")
+with tab6: render_food_cost_tab("Lê Quang Định", "LQD", "Lục_LQD")
