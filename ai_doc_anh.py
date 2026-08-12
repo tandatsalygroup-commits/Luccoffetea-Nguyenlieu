@@ -50,30 +50,24 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# CẤU HÌNH THANH SIDEBAR (CẬP NHẬT ĐỒNG LOẠT ONLINE)
+# CẤU HÌNH THANH SIDEBAR (LƯU LINK CHUNG - KHÔNG ĐỒNG BỘ ÉP BUỘC)
 # ==========================================
-if "refresh_onl" not in st.session_state: st.session_state["refresh_onl"] = 0
-
 st.sidebar.markdown("### ⚙️ CẤU HÌNH ĐỐI SOÁT ONLINE")
 st.sidebar.info("Thiết lập Link 1 lần ở đây, áp dụng cho cả 3 chi nhánh Trường Sa, Lê Quang Định, Trần Huy Liệu.")
 
 def_onl_link = app_config.get("online_master", {}).get("link", "")
 global_onl_link = st.sidebar.text_input("🔗 Link Google Sheet (Tổng):", value=def_onl_link, key="global_onl_link")
 
-if st.sidebar.button("🚀 LƯU & CẬP NHẬT ĐỒNG LOẠT", use_container_width=True):
+if st.sidebar.button("🚀 LƯU & ÁP DỤNG LINK", use_container_width=True):
     if "online_master" not in app_config: app_config["online_master"] = {}
     app_config["online_master"]["link"] = global_onl_link
     save_config(app_config)
-    st.session_state["refresh_onl"] += 1
-    # Xóa cache để ép tải lại toàn bộ
-    st.cache_data.clear()
-    st.sidebar.success("✅ Đã kích hoạt làm mới toàn hệ thống!")
-    st.rerun()
+    st.sidebar.success("✅ Đã lưu! Các Tab sẽ tự dùng link này khi cần.")
 
 st.title("📊 Hệ Thống Bóc Tách & Phân Tích Dữ Liệu F&B")
 
 # ==========================================
-# HÀM HỖ TRỢ XỬ LÝ TIỀN TỆ & ĐỌC DỮ LIỆU
+# HÀM HỖ TRỢ XỬ LÝ TIỀN TỆ & ĐỌC DỮ LIỆU TỐI ƯU HÓA CACHE
 # ==========================================
 def clean_money(val):
     if pd.isna(val): return 0
@@ -86,7 +80,7 @@ def clean_money(val):
         if val_str == '': return 0
         return int(val_str)
 
-@st.cache_data(ttl=600, show_spinner=False)
+@st.cache_data(ttl=900, show_spinner=False)
 def doc_du_lieu_gg_sheet(link, ten_tab, refresh_trigger=0):
     file_id = re.search(r'/d/([a-zA-Z0-9-_]+)', link).group(1)
     xlsx_url = f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=xlsx"
@@ -510,12 +504,15 @@ with tab3:
             st.rerun()
 
 # ==========================================
-# HÀM LÕI KÉO DỮ LIỆU FOOD COST (ĐÃ KHÓA CỘT MẶC ĐỊNH & ẨN NÚT SYNC CÁ THỂ)
+# HÀM LÕI KÉO DỮ LIỆU FOOD COST (TỐI ƯU CỘT MẶC ĐỊNH & LAZY LOAD)
 # ==========================================
 def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
     st.markdown(f"### 🧮 Quản Trị Tỷ Lệ % Nguyên Liệu (Food Cost) - {cn_mac_dinh}")
     st.info("Hệ thống tự động lấp dữ liệu Tồn Kho (Tab 1) và Doanh Thu iPOS (Tab 2) dựa theo chi nhánh được chọn.")
     
+    # Tạo biến trigger độc lập cho tab này để xử lý Lazy Loading
+    if f"refresh_{prefix_key}" not in st.session_state: st.session_state[f"refresh_{prefix_key}"] = 0
+        
     col_filter1, col_filter2 = st.columns(2)
     with col_filter1:
         today = datetime.date.today()
@@ -593,27 +590,35 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
 
     with col_dt2:
         st.write("**🛵 Doanh thu Online (ShopeeFood, Grab...)**")
-        st.caption("*(Link nguồn & Cập nhật tự động nằm ở Sidebar bên trái)*")
+        st.caption("*(Link nguồn đã được cấu hình chung ở Sidebar bên trái)*")
         
         def_fc_tab = app_config.get("food_cost", {}).get(cn_mac_dinh, {}).get("tab", default_tab_sheet)
-        ten_tab = st.text_input(f"📌 Tên Tab Sheet của {cn_mac_dinh}:", value=def_fc_tab, key=f"tabsheet_{prefix_key}") 
         
-        # Tự động lưu tên tab khi có sự thay đổi
-        if ten_tab != def_fc_tab:
-            if "food_cost" not in app_config: app_config["food_cost"] = {}
-            if cn_mac_dinh not in app_config["food_cost"]: app_config["food_cost"][cn_mac_dinh] = {}
-            app_config["food_cost"][cn_mac_dinh]["tab"] = ten_tab
-            save_config(app_config)
+        col_tab, col_btn = st.columns([2, 1])
+        with col_tab:
+            ten_tab = st.text_input(f"📌 Tên Tab Sheet của {cn_mac_dinh}:", value=def_fc_tab, key=f"tabsheet_{prefix_key}") 
+        with col_btn:
+            st.write("")
+            st.write("")
+            if st.button("🔄 Lấy Số Online", key=f"btn_capnhat_{prefix_key}"):
+                if "food_cost" not in app_config: app_config["food_cost"] = {}
+                if cn_mac_dinh not in app_config["food_cost"]: app_config["food_cost"][cn_mac_dinh] = {}
+                app_config["food_cost"][cn_mac_dinh]["tab"] = ten_tab
+                save_config(app_config)
+                st.session_state[f"refresh_{prefix_key}"] += 1
             
         dt_online = 0
         link_gg_sheet = app_config.get("online_master", {}).get("link", "")
         
         if link_gg_sheet:
             try:
-                df_onl = doc_du_lieu_gg_sheet(link_gg_sheet, ten_tab, st.session_state["refresh_onl"])
+                with st.spinner(f"⏳ Đang tải doanh thu Online {cn_mac_dinh}..."):
+                    # Chỉ gọi load data khi Tab này đang được kích hoạt và bấm Lấy Số Online
+                    df_onl = doc_du_lieu_gg_sheet(link_gg_sheet, ten_tab, st.session_state[f"refresh_{prefix_key}"])
+                
                 cols_onl = ["Không chọn"] + df_onl.columns.tolist()
                 
-                # Ép chặt Cột Mặc Định theo chuẩn của chuỗi Lục Coffee
+                # --- ÉP CỨNG CHỌN CỘT MẶC ĐỊNH CHO LỤC COFFEE ---
                 idx_ngay = cols_onl.index("Theo Ngày") if "Theo Ngày" in cols_onl else 0
                 idx_doanhthu = cols_onl.index("Tổng Doanh Thu") if "Tổng Doanh Thu" in cols_onl else 0
                 
