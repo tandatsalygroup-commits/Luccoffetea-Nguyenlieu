@@ -51,7 +51,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# HÀM KÉO DỮ LIỆU GOOGLE SHEET VÀ LÀM SẠCH
+# HÀM KÉO DỮ LIỆU GOOGLE SHEET VÀ LÀM SẠCH (ĐÃ SỬA LỖI NGÀY THÁNG)
 # ==========================================
 def clean_money(val):
     if pd.isna(val): return 0
@@ -64,23 +64,31 @@ def clean_money(val):
         if val_str == '': return 0
         return int(val_str)
 
+def clean_date_robust(date_series):
+    """Hàm bọc thép: Quét 3 tầng để tránh nhầm lẫn format ngày tháng của Google Sheet"""
+    # Xóa số ".0" dư thừa nếu format bị chuyển thành float
+    ds_str = date_series.astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+    
+    # 1. Thử ISO (YYYY-MM-DD) do Pandas lưu từ kiểu Datetime của Excel
+    cleaned = pd.to_datetime(ds_str, format='%Y-%m-%d', errors='coerce')
+    
+    # 2. Thử chuẩn VN (DD/MM/YYYY) do nhập Text bằng tay
+    mask_na = cleaned.isna()
+    if mask_na.any():
+        cleaned.loc[mask_na] = pd.to_datetime(ds_str.loc[mask_na], format='%d/%m/%Y', errors='coerce')
+        
+    # 3. Phủ lưới chót cho các định dạng lẫn lộn khác
+    mask_na = cleaned.isna()
+    if mask_na.any():
+        cleaned.loc[mask_na] = pd.to_datetime(ds_str.loc[mask_na], errors='coerce', dayfirst=True)
+        
+    return cleaned.dt.normalize() # normalize() để xóa sạch giờ/phút, chỉ giữ lại ngày
+
 @st.cache_data(ttl=600, show_spinner=False)
 def doc_du_lieu_gg_sheet(link, ten_tab, refresh_trigger=0):
     file_id = re.search(r'/d/([a-zA-Z0-9-_]+)', link).group(1)
     xlsx_url = f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=xlsx"
     return pd.read_excel(xlsx_url, sheet_name=ten_tab)
-
-def clean_date_robust(date_series):
-    """Hàm bọc thép xử lý đủ mọi loại định dạng ngày tháng lệch lạc từ Excel"""
-    # Ép về datetime chuẩn, ưu tiên định dạng d/m/y (ngày/tháng/năm của VN)
-    cleaned = pd.to_datetime(date_series, format='%d/%m/%Y', errors='coerce')
-    mask_na = cleaned.isna()
-    if mask_na.any():
-        # Nếu có lỗi, dùng cơ chế tự đoán của Pandas, ưu tiên ngày trước tháng
-        cleaned.loc[mask_na] = pd.to_datetime(date_series.loc[mask_na], errors='coerce', dayfirst=True)
-    
-    # Cuối cùng, gọt sạch giờ/phút/giây, chỉ lấy đúng ngày
-    return cleaned.dt.normalize()
 
 danh_sach_cn_he_thong = ["Trường Sa", "Lê Quang Định", "Trần Huy Liệu"]
 
@@ -215,11 +223,9 @@ with tab1:
             date_cols = [c for c in df_kho.columns if 'ngày' in c.lower() or 'date' in c.lower() or 'thời gian' in c.lower()]
             if date_cols:
                 date_col = date_cols[0]
-                df_kho['_temp_date'] = pd.to_datetime(df_kho[date_col], format='%d/%m/%Y', errors='coerce')
-                if df_kho['_temp_date'].isna().all():
-                    df_kho['_temp_date'] = pd.to_datetime(df_kho[date_col], errors='coerce')
-                
+                df_kho['_temp_date'] = clean_date_robust(df_kho[date_col])
                 df_kho['_temp_date_obj'] = df_kho['_temp_date'].dt.date
+                
                 min_date = df_kho['_temp_date_obj'].min()
                 max_date = df_kho['_temp_date_obj'].max()
                 
@@ -407,11 +413,7 @@ with tab2:
         
         time_col_master = next((c for c in df_ban.columns if 'thời gian' in str(c).lower() or 'ngày' in str(c).lower()), None)
         if time_col_master:
-            df_ban['Date_Obj'] = pd.to_datetime(df_ban[time_col_master], format='%d/%m/%Y', errors='coerce').dt.date
-            mask_ban = df_ban['Date_Obj'].isna()
-            if mask_ban.any():
-                df_ban.loc[mask_ban, 'Date_Obj'] = pd.to_datetime(df_ban.loc[mask_ban, time_col_master], errors='coerce', dayfirst=True).dt.date
-            
+            df_ban['Date_Obj'] = clean_date_robust(df_ban[time_col_master]).dt.date
             df_ban['Ngày_Chuan_Str'] = pd.to_datetime(df_ban['Date_Obj']).dt.strftime('%d/%m/%Y')
                  
             df_daily_multi = df_ban.groupby(['Chi Nhánh Hệ Thống', 'Ngày_Chuan_Str'])['Tổng tiền'].sum().reset_index()
@@ -538,12 +540,14 @@ with tab3:
             st.rerun()
 
 # ==========================================
-# HÀM LÕI KÉO DỮ LIỆU FOOD COST (TÙY CHỌN CỘT VỚI MẶC ĐỊNH & SỬA LỖI NGÀY)
+# HÀM LÕI KÉO DỮ LIỆU FOOD COST (ĐÃ BỌC THÉP XỬ LÝ NGÀY THÁNG)
 # ==========================================
 def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
     st.markdown(f"### 🧮 Quản Trị Tỷ Lệ % Nguyên Liệu (Food Cost) - {cn_mac_dinh}")
     st.info("Hệ thống tự động lấp dữ liệu Tồn Kho (Tab 1) và Doanh Thu iPOS (Tab 2) dựa theo chi nhánh được chọn.")
     
+    if f"refresh_{prefix_key}" not in st.session_state: st.session_state[f"refresh_{prefix_key}"] = 0
+        
     col_filter1, col_filter2 = st.columns(2)
     with col_filter1:
         today = datetime.date.today()
@@ -587,10 +591,8 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
         if cot_cn and cot_ngay and cot_gt:
             df_k_cn = df_k[df_k[cot_cn] == cn_doisoat].copy()
             df_k_cn['Date_Obj'] = clean_date_robust(df_k_cn[cot_ngay])
-                
             df_k_cn[cot_gt] = df_k_cn[cot_gt].apply(clean_money)
             
-            # Ép kiểu cho start_date và end_date để so sánh
             start_ts = pd.to_datetime(start_date)
             end_ts = pd.to_datetime(end_date)
             
@@ -623,15 +625,26 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
     with col_dt2:
         st.write("**🛵 Doanh thu Online (ShopeeFood, Grab...)**")
         st.caption("*(Dữ liệu được lấy cục bộ từ việc Cập nhật Đồng loạt ở Sidebar)*")
+        
+        def_fc_tab = app_config.get("food_cost", {}).get(cn_mac_dinh, {}).get("tab", default_tab_sheet)
+        
+        # Ẩn nút Cập Nhật nhỏ, chỉ để lại chỗ điền tên Tab
+        ten_tab = st.text_input(f"📌 Tên Tab Sheet của {cn_mac_dinh}:", value=def_fc_tab, key=f"tabsheet_{prefix_key}") 
+        
+        # Nếu đổi tên Tab thì tự động lưu luôn
+        if ten_tab != def_fc_tab:
+            if "food_cost" not in app_config: app_config["food_cost"] = {}
+            if cn_mac_dinh not in app_config["food_cost"]: app_config["food_cost"][cn_mac_dinh] = {}
+            app_config["food_cost"][cn_mac_dinh]["tab"] = ten_tab
+            save_config(app_config)
             
         dt_online = 0
         file_onl = f"temp_onl_{cn_mac_dinh}.csv"
         
-        # --- ĐỌC FILE CỤC BỘ & HIỂN THỊ DROPDOWN CHỌN CỘT ---
         if os.path.exists(file_onl):
             try:
                 df_onl = pd.read_csv(file_onl)
-                df_onl.columns = [str(c).strip() for c in df_onl.columns] # Làm sạch khoảng trắng
+                df_onl.columns = [str(c).strip() for c in df_onl.columns] 
                 
                 cols_onl = ["Không chọn"] + df_onl.columns.tolist()
                 
@@ -644,13 +657,12 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
                 with c2_onl: cot_dt_onl = st.selectbox("Cột Doanh Thu:", options=cols_onl, index=idx_doanhthu, key=f"coldt_{prefix_key}")
                 
                 if cot_ngay_onl != "Không chọn" and cot_dt_onl != "Không chọn":
-                    # --- BỘ LỌC NGÀY THÁNG BỌC THÉP TỪ HÀM ---
+                    # XỬ LÝ NGÀY THÁNG BỌC THÉP TRÁNH BỊ ĐẢO LỘN NGÀY VÀ THÁNG
                     df_onl['Ngay_Chuan'] = clean_date_robust(df_onl[cot_ngay_onl])
                     
                     start_ts = pd.to_datetime(start_date)
                     end_ts = pd.to_datetime(end_date)
                     
-                    # Lọc số liệu chuẩn xác
                     df_onl_ngay = df_onl[(df_onl['Ngay_Chuan'] >= start_ts) & (df_onl['Ngay_Chuan'] <= end_ts)].copy()
                     
                     if not df_onl_ngay.empty:
@@ -661,7 +673,7 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
                     else:
                         st.info("Không có đơn Online trong ngày này.")
             except Exception as e:
-                st.error(f"❌ Lỗi đọc dữ liệu cục bộ: {e}")
+                st.error(f"❌ Lỗi đọc dữ liệu cục bộ.")
         else:
             st.warning("⚠️ Chưa có dữ liệu Online. Vui lòng bấm 'LƯU & CẬP NHẬT ĐỒNG LOẠT' ở menu bên trái.")
             
