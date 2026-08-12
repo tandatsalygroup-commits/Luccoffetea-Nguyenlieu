@@ -52,7 +52,7 @@ st.markdown("""
 st.title("📊 Hệ Thống Bóc Tách & Phân Tích Dữ Liệu F&B")
 
 # ==========================================
-# HÀM ĐỌC DỮ LIỆU ĐÃ ĐƯỢC TỐI ƯU CƠ CHẾ CACHE ĐỘC LẬP
+# HÀM HỖ TRỢ XỬ LÝ TIỀN TỆ & ĐỌC DỮ LIỆU
 # ==========================================
 def clean_money(val):
     if pd.isna(val): return 0
@@ -65,7 +65,6 @@ def clean_money(val):
         if val_str == '': return 0
         return int(val_str)
 
-# Thêm biến refresh_trigger để mỗi Tab có thể tự nạp lại mà không ảnh hưởng Tab khác
 @st.cache_data(ttl=600, show_spinner=False)
 def doc_du_lieu_gg_sheet(link, ten_tab, refresh_trigger=0):
     file_id = re.search(r'/d/([a-zA-Z0-9-_]+)', link).group(1)
@@ -73,6 +72,13 @@ def doc_du_lieu_gg_sheet(link, ten_tab, refresh_trigger=0):
     return pd.read_excel(xlsx_url, sheet_name=ten_tab)
 
 danh_sach_cn_he_thong = ["Trường Sa", "Lê Quang Định", "Trần Huy Liệu"]
+
+# --- HÀM TÌM CỘT TỰ ĐỘNG ---
+def auto_select_col(columns_list, target_keywords):
+    for i, col in enumerate(columns_list):
+        if any(keyword in str(col).lower() for keyword in target_keywords):
+            return i + 1  # +1 vì option đầu tiên là "Không chọn"
+    return 0
 
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "📦 Xử Lý Tồn Kho", 
@@ -83,9 +89,9 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "🧮 % Lê Quang Định"
 ])
 
-# Khởi tạo khóa làm mới trong bộ nhớ
 if "refresh_kho" not in st.session_state: st.session_state["refresh_kho"] = 0
-if "refresh_ipos" not in st.session_state: st.session_state["refresh_ipos"] = {}
+if "refresh_ipos" not in st.session_state: st.session_state["refresh_ipos"] = {cn: 0 for cn in danh_sach_cn_he_thong}
+if "refresh_onl" not in st.session_state: st.session_state["refresh_onl"] = 0
 
 # ==========================================
 # TAB 1: XỬ LÝ TỒN KHO 
@@ -115,7 +121,6 @@ with tab1:
                 app_config["kho"]["link"] = link_appsheet
                 app_config["kho"]["tab"] = tab_appsheet
                 save_config(app_config)
-                # Tăng khóa để bắt buộc tải lại file này (không ảnh hưởng file khác)
                 st.session_state["refresh_kho"] += 1
             
         if link_appsheet:
@@ -234,62 +239,73 @@ with tab1:
 # ==========================================
 with tab2:
     st.markdown("### 📈 Phân Tích Bán Hàng iPOS (Đa Chi Nhánh)")
-    st.info("Sử dụng Google Sheet để đảm bảo dữ liệu bán hàng được lưu trữ vĩnh viễn, không bị mất khi ứng dụng khởi động lại.")
+    st.info("Sử dụng 1 Link Google Sheet chung chứa tất cả báo cáo của các chi nhánh. Hệ thống sẽ tự động tách và phân bổ dữ liệu.")
     
-    with st.expander("📥 QUẢN LÝ DỮ LIỆU IPOS TỪNG CHI NHÁNH", expanded=True):
+    with st.expander("📥 QUẢN LÝ DỮ LIỆU IPOS TOÀN HỆ THỐNG", expanded=True):
         loai_nguon_ipos = st.radio("Cấp dữ liệu báo cáo iPOS bằng cách:", 
                                    options=["🔗 Liên kết Google Sheet (Lưu Vĩnh Viễn)", "📁 Tải file thủ công (Bị mất khi qua ngày)"], horizontal=True)
+        st.write("---")
         
-        col_up1, col_up2 = st.columns([1, 2])
-        with col_up1:
-            cn_upload = st.selectbox("1. Chọn chi nhánh cần cập nhật:", options=danh_sach_cn_he_thong)
-            if cn_upload not in st.session_state["refresh_ipos"]: 
-                st.session_state["refresh_ipos"][cn_upload] = 0
-        
-        with col_up2:
-            if loai_nguon_ipos == "🔗 Liên kết Google Sheet (Lưu Vĩnh Viễn)":
-                st.write(f"**2. Kết nối báo cáo iPOS của {cn_upload}**")
+        if loai_nguon_ipos == "🔗 Liên kết Google Sheet (Lưu Vĩnh Viễn)":
+            st.write("**1. Cấu hình nguồn dữ liệu iPOS chung cho toàn hệ thống**")
+            
+            def_ipos_link = app_config.get("ipos_master", {}).get("link", "")
+            link_ipos = st.text_input("🔗 Link Google Sheet (Dùng chung cho cả 3 chi nhánh):", value=def_ipos_link)
+            
+            st.write("**2. Khai báo Tên Tab (Sheet) tương ứng với từng chi nhánh:**")
+            col_t1, col_t2, col_t3 = st.columns(3)
+            with col_t1: tab_ts = st.text_input("Trường Sa:", value=app_config.get("ipos_master", {}).get("tab_TS", "iPOS_Trường Sa"))
+            with col_t2: tab_lqd = st.text_input("Lê Quang Định:", value=app_config.get("ipos_master", {}).get("tab_LQD", "iPOS_Lê Quang Định"))
+            with col_t3: tab_thl = st.text_input("Trần Huy Liệu:", value=app_config.get("ipos_master", {}).get("tab_THL", "iPOS_Trần Huy Liệu"))
+            
+            if st.button("🚀 ĐỒNG BỘ CẢ 3 CHI NHÁNH TỪ IPOS", use_container_width=True):
+                if "ipos_master" not in app_config: app_config["ipos_master"] = {}
+                app_config["ipos_master"]["link"] = link_ipos
+                app_config["ipos_master"]["tab_TS"] = tab_ts
+                app_config["ipos_master"]["tab_LQD"] = tab_lqd
+                app_config["ipos_master"]["tab_THL"] = tab_thl
+                save_config(app_config)
                 
-                def_ipos_link = app_config.get("ipos", {}).get(cn_upload, {}).get("link", "")
-                def_ipos_tab = app_config.get("ipos", {}).get(cn_upload, {}).get("tab", f"iPOS_{cn_upload}")
-                
-                link_ipos = st.text_input("🔗 Link Google Sheet (iPOS):", value=def_ipos_link, key=f"link_ipos_{cn_upload}")
-                tab_ipos = st.text_input("📌 Tên Tab Sheet:", value=def_ipos_tab, key=f"tab_ipos_{cn_upload}")
-                
-                if st.button(f"🔄 Lấy Dữ Liệu {cn_upload}"):
-                    if "ipos" not in app_config: app_config["ipos"] = {}
-                    if cn_upload not in app_config["ipos"]: app_config["ipos"][cn_upload] = {}
-                    app_config["ipos"][cn_upload]["link"] = link_ipos
-                    app_config["ipos"][cn_upload]["tab"] = tab_ipos
-                    save_config(app_config)
+                if link_ipos:
+                    tabs_map = {
+                        "Trường Sa": tab_ts, 
+                        "Lê Quang Định": tab_lqd, 
+                        "Trần Huy Liệu": tab_thl
+                    }
                     
-                    st.session_state["refresh_ipos"][cn_upload] += 1
-                    
-                    if link_ipos:
-                        try:
-                            with st.spinner(f"⏳ Đang tải dữ liệu iPOS {cn_upload} từ mây..."):
-                                df_new = doc_du_lieu_gg_sheet(link_ipos, tab_ipos, st.session_state["refresh_ipos"][cn_upload])
+                    with st.spinner("⏳ Hệ thống đang quét và đồng bộ dữ liệu iPOS của cả 3 chi nhánh từ mây..."):
+                        for cn_upload, tab_name in tabs_map.items():
+                            try:
+                                if cn_upload not in st.session_state["refresh_ipos"]: st.session_state["refresh_ipos"][cn_upload] = 0
+                                st.session_state["refresh_ipos"][cn_upload] += 1
+                                
+                                df_new = doc_du_lieu_gg_sheet(link_ipos, tab_name, st.session_state["refresh_ipos"][cn_upload])
+                                
                                 if 'Tên hàng' not in df_new.columns and len(df_new) > 0:
-                                    # Fallback if header is at row 1 or 2
                                     file_id = re.search(r'/d/([a-zA-Z0-9-_]+)', link_ipos).group(1)
-                                    df_new = pd.read_excel(f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=xlsx", sheet_name=tab_ipos, header=1)
+                                    df_new = pd.read_excel(f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=xlsx", sheet_name=tab_name, header=1)
                                     if 'Tên hàng' not in df_new.columns and len(df_new) > 0:
-                                        df_new = pd.read_excel(f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=xlsx", sheet_name=tab_ipos, header=2)
+                                        df_new = pd.read_excel(f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=xlsx", sheet_name=tab_name, header=2)
                                 
                                 if cn_upload == "Lê Quang Định" and "Nguồn" in df_new.columns:
                                     cac_nguon_hop_le = ['mang về', 'mang ve', 'tại chỗ', 'tại chổ', 'tai cho', 'tại cho', 'tai chỗ']
                                     df_new = df_new[df_new['Nguồn'].astype(str).str.strip().str.lower().isin(cac_nguon_hop_le)]
                                 
                                 if df_new.empty:
-                                    st.error("❌ Dữ liệu trống!")
+                                    st.warning(f"⚠️ {cn_upload} (Tab: {tab_name}): Không có dữ liệu hợp lệ.")
                                 else:
                                     df_new['Chi Nhánh Hệ Thống'] = cn_upload
                                     df_new.to_csv(f"temp_ipos_{cn_upload}.csv", index=False)
-                                    st.success(f"✅ Đã kéo và lưu dữ liệu {cn_upload}!")
-                                    st.rerun()
-                        except Exception as e:
-                            st.error(f"❌ Lỗi: {e}")
-            else:
+                            except Exception as e:
+                                st.error(f"❌ Lỗi tải {cn_upload} (Tab '{tab_name}'): {e}")
+                        st.success("✅ Đã hoàn tất đồng bộ toàn hệ thống!")
+                        st.rerun()
+                        
+        else:
+            col_up1, col_up2 = st.columns([1, 2])
+            with col_up1:
+                cn_upload = st.selectbox("1. Chọn chi nhánh cần cập nhật file thủ công:", options=danh_sach_cn_he_thong)
+            with col_up2:
                 file_ipos = st.file_uploader(f"2. Tải báo cáo iPOS của {cn_upload}", type=['xlsx', 'xls', 'csv'], key="upload_ipos")
                 if file_ipos is not None:
                     try:
@@ -316,14 +332,14 @@ with tab2:
                         st.error(f"❌ Lỗi đọc file: {e}")
                     
         st.write("---")
-        st.write("**🗄️ Trạng thái bộ nhớ tạm hiện tại:**")
+        st.write("**🗄️ Trạng thái khay dữ liệu hiện tại:**")
         cols_status = st.columns(3)
         for i, cn in enumerate(danh_sach_cn_he_thong):
             file_path = f"temp_ipos_{cn}.csv"
             with cols_status[i]:
                 if os.path.exists(file_path):
                     st.success(f"🟢 **{cn}**: Có dữ liệu")
-                    if st.button(f"🗑️ Xóa bộ nhớ {cn}", key=f"del_{cn}"):
+                    if st.button(f"🗑️ Xóa bộ nhớ {cn}", key=f"del_{cn}", use_container_width=True):
                         os.remove(file_path)
                         st.rerun()
                 else:
@@ -485,14 +501,26 @@ with tab3:
             st.rerun()
 
 # ==========================================
-# HÀM LÕI KÉO DỮ LIỆU FOOD COST TỐI ƯU CƠ CHẾ CHỜ
+# CẤU HÌNH DOANH THU ONLINE CHUNG CHO TAB 4, 5, 6
+# ==========================================
+st.sidebar.markdown("### ⚙️ CẤU HÌNH LINK ĐỐI SOÁT ONLINE")
+st.sidebar.info("Cập nhật 1 lần dùng chung cho tất cả các Chi nhánh.")
+def_onl_link = app_config.get("online_master", {}).get("link", "")
+global_onl_link = st.sidebar.text_input("🔗 Link Google Sheet (Doanh Thu Online):", value=def_onl_link, key="global_onl_link")
+if st.sidebar.button("💾 Lưu Link Online", use_container_width=True):
+    if "online_master" not in app_config: app_config["online_master"] = {}
+    app_config["online_master"]["link"] = global_onl_link
+    save_config(app_config)
+    st.sidebar.success("✅ Đã lưu!")
+
+# ==========================================
+# HÀM LÕI KÉO DỮ LIỆU FOOD COST (TỰ ĐỘNG CHỌN CỘT)
 # ==========================================
 def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
     st.markdown(f"### 🧮 Quản Trị Tỷ Lệ % Nguyên Liệu (Food Cost) - {cn_mac_dinh}")
     st.info("Hệ thống tự động lấp dữ liệu Tồn Kho (Tab 1) và Doanh Thu iPOS (Tab 2) dựa theo chi nhánh được chọn.")
     
-    if f"refresh_{prefix_key}" not in st.session_state:
-        st.session_state[f"refresh_{prefix_key}"] = 0
+    if f"refresh_{prefix_key}" not in st.session_state: st.session_state[f"refresh_{prefix_key}"] = 0
         
     col_filter1, col_filter2 = st.columns(2)
     with col_filter1:
@@ -571,34 +599,40 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
 
     with col_dt2:
         st.write("**🛵 Doanh thu Online (ShopeeFood, Grab...)**")
+        st.caption("*(Link nguồn đã được cấu hình chung ở Sidebar bên trái)*")
         
-        def_fc_link = app_config.get("food_cost", {}).get(cn_mac_dinh, {}).get("link", "")
         def_fc_tab = app_config.get("food_cost", {}).get(cn_mac_dinh, {}).get("tab", default_tab_sheet)
-        
-        link_gg_sheet = st.text_input("🔗 Link đối soát (Google Sheet):", value=def_fc_link, key=f"link_{prefix_key}")
         
         col_tab, col_btn = st.columns([2, 1])
         with col_tab:
-            ten_tab = st.text_input("📌 Tên Tab (Ví dụ: Lục_TS):", value=def_fc_tab, key=f"tabsheet_{prefix_key}") 
+            ten_tab = st.text_input(f"📌 Tên Tab Sheet của {cn_mac_dinh}:", value=def_fc_tab, key=f"tabsheet_{prefix_key}") 
         with col_btn:
             st.write("")
             st.write("")
-            if st.button("🔄 Cập nhật", key=f"btn_capnhat_{prefix_key}"):
+            if st.button("🔄 Lấy Số Online", key=f"btn_capnhat_{prefix_key}"):
                 if "food_cost" not in app_config: app_config["food_cost"] = {}
                 if cn_mac_dinh not in app_config["food_cost"]: app_config["food_cost"][cn_mac_dinh] = {}
-                app_config["food_cost"][cn_mac_dinh]["link"] = link_gg_sheet
                 app_config["food_cost"][cn_mac_dinh]["tab"] = ten_tab
                 save_config(app_config)
-                st.session_state[f"refresh_{prefix_key}"] += 1
+                st.session_state["refresh_onl"] += 1
             
         dt_online = 0
+        link_gg_sheet = app_config.get("online_master", {}).get("link", "")
+        
         if link_gg_sheet:
             try:
                 with st.spinner(f"⏳ Đang tải doanh thu Online {cn_mac_dinh}..."):
-                    df_onl = doc_du_lieu_gg_sheet(link_gg_sheet, ten_tab, st.session_state[f"refresh_{prefix_key}"])
+                    df_onl = doc_du_lieu_gg_sheet(link_gg_sheet, ten_tab, st.session_state["refresh_onl"])
+                
+                cols_onl = ["Không chọn"] + df_onl.columns.tolist()
+                
+                # --- AI TỰ ĐỘNG CHỌN CỘT ---
+                idx_ngay = auto_select_col(cols_onl, ["theo ngày", "ngày", "date"])
+                idx_doanhthu = auto_select_col(cols_onl, ["tổng doanh thu", "doanh thu", "tổng tiền", "revenue"])
+                
                 c1_onl, c2_onl = st.columns(2)
-                with c1_onl: cot_ngay_onl = st.selectbox("Cột Ngày:", options=["Không chọn"] + df_onl.columns.tolist(), key=f"colngay_{prefix_key}")
-                with c2_onl: cot_dt_onl = st.selectbox("Cột Doanh Thu:", options=["Không chọn"] + df_onl.columns.tolist(), key=f"coldt_{prefix_key}")
+                with c1_onl: cot_ngay_onl = st.selectbox("Cột Ngày:", options=cols_onl, index=idx_ngay, key=f"colngay_{prefix_key}")
+                with c2_onl: cot_dt_onl = st.selectbox("Cột Doanh Thu:", options=cols_onl, index=idx_doanhthu, key=f"coldt_{prefix_key}")
                 
                 if cot_ngay_onl != "Không chọn" and cot_dt_onl != "Không chọn":
                     df_onl['Ngay_Chuan'] = pd.to_datetime(df_onl[cot_ngay_onl], dayfirst=True, errors='coerce').dt.date
