@@ -60,36 +60,24 @@ def clean_money(val):
     val_str = str(val).strip()
     if not val_str or val_str in ['-', 'nan', '##########']: return 0
     
-    # 1. Giữ lại CHỈ số, dấu chấm, dấu phẩy và dấu âm. Xóa sạch mọi chữ cái (VNĐ, đ, VND...)
     val_str = re.sub(r'[^\d\.,\-]', '', val_str)
-    
-    # 2. Xóa phần thập phân (1-2 chữ số theo sau dấu chấm/phẩy nằm ở cuối cùng của chuỗi)
     val_str = re.sub(r'[\.,]\d{1,2}$', '', val_str)
-    
-    # 3. Xóa mọi dấu phân cách hàng nghìn, giữ lại đúng số tinh khiết và dấu âm
     val_str = re.sub(r'[^\d\-]', '', val_str)
     
     if not val_str or val_str == '-': return 0
     return int(val_str)
 
 def clean_date_robust(date_series):
-    ds_str = date_series.astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+    """Hàm xử lý ngày tháng CỰC MẠNH: Tự động chặt bỏ giờ phút giây thừa"""
+    ds_str = date_series.astype(str).str.strip()
+    # Chặt bỏ phần giờ phút nếu có (chia cắt bởi dấu cách)
+    ds_str = ds_str.apply(lambda x: x.split()[0] if isinstance(x, str) and ' ' in x else x)
+    ds_str = ds_str.str.replace(r'\.0$', '', regex=True)
+    
     cleaned = pd.to_datetime(ds_str, format='%Y-%m-%d', errors='coerce')
     mask_na = cleaned.isna()
     if mask_na.any():
         cleaned.loc[mask_na] = pd.to_datetime(ds_str.loc[mask_na], format='%d/%m/%Y', errors='coerce')
-    mask_na = cleaned.isna()
-    if mask_na.any():
-        cleaned.loc[mask_na] = pd.to_datetime(ds_str.loc[mask_na], errors='coerce', dayfirst=True)
-    return cleaned.dt.normalize()
-
-def clean_ipos_date(date_series):
-    ds_str = date_series.astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
-    ds_date_part = ds_str.str.split().str[0]
-    cleaned = pd.to_datetime(ds_date_part, format='%d/%m/%Y', errors='coerce')
-    mask_na = cleaned.isna()
-    if mask_na.any():
-        cleaned.loc[mask_na] = pd.to_datetime(ds_date_part.loc[mask_na], format='%Y-%m-%d', errors='coerce')
     mask_na = cleaned.isna()
     if mask_na.any():
         cleaned.loc[mask_na] = pd.to_datetime(ds_str.loc[mask_na], errors='coerce', dayfirst=True)
@@ -136,7 +124,7 @@ danh_sach_cn_he_thong = ["Trường Sa", "Lê Quang Định", "Trần Huy Liệu
 # THANH SIDEBAR TỰ ĐỘNG ĐỒNG BỘ ONLINE 
 # ==========================================
 st.sidebar.markdown("### ⚙️ CẤU HÌNH ĐỐI SOÁT ONLINE")
-st.sidebar.info("Thiết lập Link 1 lần duy nhất ở đây. Bấm nút dưới để hệ thống kéo toàn bộ dữ liệu về chạy cục bộ siêu tốc.")
+st.sidebar.info("Thiết lập Link 1 lần duy nhất ở đây. Bấm nút dưới để hệ thống cấu hình liên kết.")
 
 def_onl_link = app_config.get("online_master", {}).get("link", "")
 global_onl_link = st.sidebar.text_input("🔗 Link Google Sheet (Tổng):", value=def_onl_link)
@@ -146,17 +134,8 @@ if st.sidebar.button("🚀 LƯU & CẬP NHẬT ĐỒNG LOẠT", use_container_wi
         if "online_master" not in app_config: app_config["online_master"] = {}
         app_config["online_master"]["link"] = global_onl_link
         save_config(app_config)
-        
-        with st.spinner("⏳ Đang quét tiêu đề và kéo dữ liệu từ mây cho 3 chi nhánh..."):
-            for cn_mac_dinh, def_tab in [("Trường Sa", "Lục_TS"), ("Lê Quang Định", "Lục_LQD"), ("Trần Huy Liệu", "Lục_THL")]:
-                tab_name = app_config.get("food_cost", {}).get(cn_mac_dinh, {}).get("tab", def_tab)
-                try:
-                    df_onl = doc_sheet_thong_minh(global_onl_link, tab_name, ['theo ngày', 'doanh thu', 'tổng doanh thu'], time.time())
-                    df_onl.to_csv(f"temp_onl_{cn_mac_dinh}.csv", index=False)
-                except Exception as e:
-                    st.sidebar.error(f"❌ Lỗi tải {cn_mac_dinh} (Sheet '{tab_name}'): Không tìm thấy hoặc link sai.")
-                    
-        st.sidebar.success("✅ Đã lấy số xong! Các Tab hiện tại đã có dữ liệu chuẩn xác.")
+        st.session_state["refresh_onl"] = time.time()
+        st.sidebar.success("✅ Đã lưu cấu hình. Dữ liệu sẽ tải tự động siêu tốc bằng bộ đệm (Cache).")
         st.rerun()
     else:
         st.sidebar.warning("⚠️ Vui lòng nhập link trước khi đồng bộ.")
@@ -174,6 +153,7 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 
 if "refresh_kho" not in st.session_state: st.session_state["refresh_kho"] = 0
 if "refresh_ipos" not in st.session_state: st.session_state["refresh_ipos"] = {cn: 0 for cn in danh_sach_cn_he_thong}
+if "refresh_onl" not in st.session_state: st.session_state["refresh_onl"] = 0
 
 # ==========================================
 # TAB 1: XỬ LÝ TỒN KHO 
@@ -411,14 +391,11 @@ with tab2:
                     df_temp = pd.read_csv(file_path)
                     if not df_temp.empty:
                         df_ban_goc_list.append(df_temp)
-                else:
-                    os.remove(file_path) 
             except Exception:
-                os.remove(file_path) 
+                pass
             
     if df_ban_goc_list:
         df_ban_master = pd.concat(df_ban_goc_list, ignore_index=True)
-        
         col_ten_hang = next((c for c in df_ban_master.columns if 'tên hàng' in str(c).lower()), None)
         if not col_ten_hang: col_ten_hang = next((c for c in df_ban_master.columns if 'mã hàng' in str(c).lower()), None)
         
@@ -427,7 +404,6 @@ with tab2:
             df_ban = df_ban[~df_ban[col_ten_hang].astype(str).str.strip().isin(['-', 'Tổng cộng'])]
             
             col_sl = next((c for c in df_ban.columns if 'số lượng' in str(c).lower()), 'Số lượng')
-            
             col_tt = None
             if len(df_ban.columns) > 38 and 'tiền' in str(df_ban.columns[38]).lower():
                 col_tt = df_ban.columns[38]
@@ -439,31 +415,25 @@ with tab2:
             if not col_tt:
                 col_tt = next((c for c in reversed(df_ban.columns.tolist()) if 'tổng tiền' in str(c).lower() or 'doanh thu' in str(c).lower()), 'Tổng tiền')
             
-            time_col_master = None
-            if len(df_ban.columns) > 12 and ('thời gian' in str(df_ban.columns[12]).lower() or 'ngày' in str(df_ban.columns[12]).lower()):
-                time_col_master = df_ban.columns[12]
-            else:
-                time_col_master = next((c for c in df_ban.columns if 'thời gian' in str(c).lower() or 'ngày' in str(c).lower()), None)
+            time_col_master = df_ban.columns[12] if len(df_ban.columns) > 12 else next((c for c in df_ban.columns if 'thời gian' in str(c).lower() or 'ngày' in str(c).lower()), None)
             
             if col_sl in df_ban.columns: df_ban['Số lượng'] = pd.to_numeric(df_ban[col_sl], errors='coerce').fillna(0)
             if col_tt in df_ban.columns: df_ban['Tổng tiền_Clean'] = df_ban[col_tt].apply(clean_money)
             
             if 'Tổng tiền_Clean' in df_ban.columns and time_col_master:
-                df_ban['Date_Obj'] = clean_ipos_date(df_ban[time_col_master])
+                df_ban['Date_Obj'] = clean_date_robust(df_ban[time_col_master])
                 df_ban = df_ban[df_ban['Date_Obj'].notna()]
                 
                 df_ban['Ngày_Chuan_Str'] = pd.to_datetime(df_ban['Date_Obj']).dt.strftime('%d/%m/%Y')
-                     
-                df_daily_multi = df_ban.groupby(['Chi Nhánh Hệ Thống', 'Ngày_Chuan_Str'])['Tổng tiền_Clean'].sum().reset_index()
                 dict_doanh_thu = {}
-                for cn in df_daily_multi['Chi Nhánh Hệ Thống'].unique():
-                    dict_doanh_thu[cn] = df_daily_multi[df_daily_multi['Chi Nhánh Hệ Thống'] == cn].set_index('Ngày_Chuan_Str')['Tổng tiền_Clean'].to_dict()
+                for cn in df_ban['Chi Nhánh Hệ Thống'].unique():
+                    df_cn_sub = df_ban[df_ban['Chi Nhánh Hệ Thống'] == cn]
+                    dict_doanh_thu[cn] = df_cn_sub.groupby('Ngày_Chuan_Str')['Tổng tiền_Clean'].sum().to_dict()
                 st.session_state['nhat_ky_doanh_thu_offline_multi'] = dict_doanh_thu
 
         st.write("---")
         st.write("### 🎛️ BỘ LỌC PHÂN TÍCH IPOS")
         col_f_ipos1, col_f_ipos2 = st.columns(2)
-        
         with col_f_ipos1:
             cn_chon_ipos = st.multiselect("🏢 Lọc xem báo cáo theo Chi nhánh:", options=danh_sach_cn_he_thong, default=danh_sach_cn_he_thong)
             
@@ -484,11 +454,8 @@ with tab2:
 
         if 'df_ban' in locals() and cn_chon_ipos and col_ten_hang:
             df_ban_view = df_ban[df_ban['Chi Nhánh Hệ Thống'].isin(cn_chon_ipos)].copy()
-            
             if start_d_ipos and end_d_ipos and 'Date_Obj' in df_ban_view.columns:
-                start_ts_ipos = pd.to_datetime(start_d_ipos)
-                end_ts_ipos = pd.to_datetime(end_d_ipos)
-                df_ban_view = df_ban_view[(df_ban_view['Date_Obj'] >= start_ts_ipos) & (df_ban_view['Date_Obj'] <= end_ts_ipos)]
+                df_ban_view = df_ban_view[(df_ban_view['Date_Obj'] >= pd.to_datetime(start_d_ipos)) & (df_ban_view['Date_Obj'] <= pd.to_datetime(end_d_ipos))]
             
             def extract_size(name):
                 match = re.search(r'\((S|M|L)\)$', str(name).strip(), re.IGNORECASE)
@@ -513,7 +480,7 @@ with tab2:
                 if not df_chart_data.empty:
                     df_trend = df_chart_data.groupby(['Date_Obj', 'Chi Nhánh Hệ Thống'])['Tổng tiền_Clean'].sum().reset_index()
                     df_pivot_trend = df_trend.pivot(index='Date_Obj', columns='Chi Nhánh Hệ Thống', values='Tổng tiền_Clean').fillna(0)
-                    df_pivot_trend = df_pivot_trend.sort_index()
+                    df_pivot_trend.index = df_pivot_trend.index.date
                     st.line_chart(df_pivot_trend)
                 
             st.write("---")
@@ -569,8 +536,6 @@ with tab2:
 # ==========================================
 with tab3:
     st.markdown("### 📋 Dữ Liệu Bảng Giá (Menu)")
-    st.info("Tải file Excel chứa Menu lên để hệ thống phân tích đối chiếu sau này.")
-    
     if os.path.exists("menu_goc.csv"):
         df_menu = pd.read_csv("menu_goc.csv")
         st.success("✅ Đã khôi phục Menu gốc.")
@@ -578,23 +543,14 @@ with tab3:
         if st.button("🗑️ Xóa Menu hiện tại"):
             os.remove("menu_goc.csv")
             st.rerun()
-    else:
-        file_menu = st.file_uploader("Tải file Menu Excel lên", type=['xlsx', 'csv'], key="menu_upload")
-        if file_menu:
-            df_raw = pd.read_csv(file_menu, header=None) if file_menu.name.endswith('.csv') else pd.read_excel(file_menu, header=None)
-            df_menu = process_dataframe_header(df_raw, [])
-            df_menu.to_csv("menu_goc.csv", index=False, encoding='utf-8-sig')
-            st.rerun()
 
 # ==========================================
-# HÀM LÕI KÉO DỮ LIỆU FOOD COST
+# HÀM LÕI KÉO DỮ LIỆU FOOD COST & NHẬP HÀNG TỰ ĐỘNG
 # ==========================================
 def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
     st.markdown(f"### 🧮 Quản Trị Tỷ Lệ % Nguyên Liệu (Food Cost) - {cn_mac_dinh}")
-    st.info("Hệ thống tự động lấp dữ liệu Tồn Kho (Tab 1) và Doanh Thu iPOS (Tab 2) dựa theo chi nhánh được chọn.")
+    st.info("Hệ thống tự động lấp dữ liệu Tồn Kho (Tab 1), Nhập Hàng (Tab 1) và Doanh Thu (Tab 2, Sidebar) dựa theo chi nhánh được chọn.")
     
-    if f"refresh_{prefix_key}" not in st.session_state: st.session_state[f"refresh_{prefix_key}"] = 0
-        
     col_filter1, col_filter2 = st.columns(2)
     with col_filter1:
         today = datetime.date.today()
@@ -610,16 +566,8 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
         
     with col_filter2:
         danh_sach_cn_tab = danh_sach_cn_he_thong.copy()
-        if 'df_kho_goc' in st.session_state and not st.session_state['df_kho_goc'].empty:
-            cols_t1 = st.session_state['df_kho_goc'].columns.tolist()
-            cot_cn_t1 = "Chi nhánh" if "Chi nhánh" in cols_t1 else ("Chi Nhánh" if "Chi Nhánh" in cols_t1 else None)
-            if cot_cn_t1:
-                danh_sach_cn_tab = st.session_state['df_kho_goc'][cot_cn_t1].dropna().unique().tolist()
-        
         if cn_mac_dinh in danh_sach_cn_tab:
             danh_sach_cn_tab.remove(cn_mac_dinh)
-            danh_sach_cn_tab.insert(0, cn_mac_dinh)
-        else:
             danh_sach_cn_tab.insert(0, cn_mac_dinh)
             
         cn_doisoat = st.selectbox("🏢 Chọn Chi nhánh đối chiếu:", options=danh_sach_cn_tab, key=f"cn_{prefix_key}")
@@ -627,28 +575,53 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
     ton_dau_auto = 0
     ton_cuoi_auto = 0
     
+    # 1. TỰ ĐỘNG LẤY TỒN ĐẦU VÀ TỒN CUỐI
     if 'df_kho_goc' in st.session_state and not st.session_state['df_kho_goc'].empty:
         df_k = st.session_state['df_kho_goc'].copy()
         cols_k = df_k.columns.tolist()
-        cot_cn = "Chi nhánh" if "Chi nhánh" in cols_k else ("Chi Nhánh" if "Chi Nhánh" in cols_k else None)
-        date_cols = [c for c in cols_k if 'ngày' in c.lower() or 'date' in c.lower() or 'thời gian' in c.lower()]
-        cot_ngay = date_cols[0] if date_cols else None
-        cot_gt = "Tổng Giá Trị Tồn Kho" if "Tổng Giá Trị Tồn Kho" in cols_k else None
+        cot_cn = next((c for c in cols_k if 'chi nhánh' in str(c).lower()), None)
+        cot_ngay = next((c for c in cols_k if 'ngày' in str(c).lower() or 'date' in str(c).lower()), None)
+        cot_gt = next((c for c in cols_k if 'giá trị' in str(c).lower() or 'tổng' in str(c).lower()), None)
         
         if cot_cn and cot_ngay and cot_gt:
-            df_k_cn = df_k[df_k[cot_cn] == cn_doisoat].copy()
+            df_k_cn = df_k[df_k[cot_cn].astype(str).str.strip() == cn_doisoat].copy()
             df_k_cn['Date_Obj'] = clean_date_robust(df_k_cn[cot_ngay])
             df_k_cn[cot_gt] = df_k_cn[cot_gt].apply(clean_money)
             
-            start_ts = pd.to_datetime(start_date)
-            end_ts = pd.to_datetime(end_date)
-            
-            td_df = df_k_cn[df_k_cn['Date_Obj'] == start_ts]
+            td_df = df_k_cn[df_k_cn['Date_Obj'] == pd.to_datetime(start_date)]
             if not td_df.empty: ton_dau_auto = td_df[cot_gt].sum()
                 
-            ngay_hom_sau = end_ts + datetime.timedelta(days=1)
-            tc_df = df_k_cn[df_k_cn['Date_Obj'] == ngay_hom_sau]
+            tc_df = df_k_cn[df_k_cn['Date_Obj'] == (pd.to_datetime(end_date) + datetime.timedelta(days=1))]
             if not tc_df.empty: ton_cuoi_auto = tc_df[cot_gt].sum()
+
+    # 2. TỰ ĐỘNG LẤY SỐ TIỀN NHẬP HÀNG TỪ LINK TAB 1
+    nhap_hang_auto = 0
+    link_kho_nhap = app_config.get("kho", {}).get("link", "")
+    if link_kho_nhap:
+        try:
+            # Truy cập trực tiếp bằng cache siêu tốc thay vì dùng file CSV trung gian
+            df_nhap = doc_sheet_thong_minh(link_kho_nhap, "Nhập Nguyên Liệu", ['chi nhánh', 'tổng cộng'], st.session_state.get("refresh_kho", 0))
+            if not df_nhap.empty and len(df_nhap.columns) > 1:
+                col_cn_nhap = next((c for c in df_nhap.columns if 'chi nhánh' in str(c).lower()), df_nhap.columns[0])
+                col_ngay_nhap = next((c for c in df_nhap.columns if 'ngày' in str(c).lower()), df_nhap.columns[1])
+                # Quét từ dưới lên để tìm đúng cột Tổng Cộng cuối cùng
+                col_tong_nhap = next((c for c in reversed(df_nhap.columns.tolist()) if 'tổng cộng' in str(c).lower()), df_nhap.columns[-1])
+                
+                df_nhap['Date_Obj'] = clean_date_robust(df_nhap[col_ngay_nhap])
+                df_nhap['Tien_Nhap'] = df_nhap[col_tong_nhap].apply(clean_money)
+                
+                start_ts = pd.to_datetime(start_date)
+                end_ts = pd.to_datetime(end_date)
+                
+                # Lọc đúng Chi nhánh & Đúng khoảng ngày
+                df_nhap_loc = df_nhap[
+                    (df_nhap[col_cn_nhap].astype(str).str.strip().str.lower() == cn_doisoat.lower()) & 
+                    (df_nhap['Date_Obj'] >= start_ts) & 
+                    (df_nhap['Date_Obj'] <= end_ts)
+                ]
+                nhap_hang_auto = int(df_nhap_loc['Tien_Nhap'].sum())
+        except Exception:
+            pass # Nếu Sheet không tồn tại thì tự động bỏ qua không gây lỗi app
 
     st.write(f"#### 1. Doanh Thu {chuoi_hien_thi}")
     col_dt1, col_dt2 = st.columns(2)
@@ -656,83 +629,72 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
     with col_dt1:
         st.write("**💵 Doanh thu Offline (tại chỗ)**")
         dt_offline_default = 0
-        
         if 'nhat_ky_doanh_thu_offline_multi' in st.session_state:
             nhat_ky_tong = st.session_state['nhat_ky_doanh_thu_offline_multi']
             if cn_doisoat in nhat_ky_tong:
                 nhat_ky_cn = nhat_ky_tong[cn_doisoat]
                 dt_goi_y = sum([int(nhat_ky_cn.get(d, 0)) for d in date_list])
-                if dt_goi_y > 0:
-                    dt_offline_default = dt_goi_y
-                    st.caption(f"*(Hệ thống tự động lấp số: {dt_goi_y:,} đ từ iPOS)*")
+                if dt_goi_y > 0: dt_offline_default = dt_goi_y
         
-        dk = f"{prefix_key}_{cn_doisoat}_{start_date}_{end_date}_{int(ton_dau_auto)}_{int(ton_cuoi_auto)}_{int(dt_offline_default)}"
+        dk = f"{prefix_key}_{cn_doisoat}_{start_date}_{end_date}"
         dt_offline = st.number_input("Chỉnh sửa Doanh thu Offline:", min_value=0, value=int(dt_offline_default), step=10000, key=f"dtoff_{dk}")
 
     with col_dt2:
         st.write("**🛵 Doanh thu Online (ShopeeFood, Grab...)**")
-        st.caption("*(Dữ liệu tự động đồng bộ từ file gốc ở Sidebar)*")
-            
-        dt_online = 0
-        file_onl = f"temp_onl_{cn_mac_dinh}.csv"
         
-        if os.path.exists(file_onl):
+        # 3. TỰ ĐỘNG LẤY DOANH THU ONLINE TỪ LINK SIDEBAR
+        dt_online = 0
+        link_onl_master = app_config.get("online_master", {}).get("link", "")
+        if link_onl_master:
             try:
-                df_onl = pd.read_csv(file_onl)
-                df_onl.columns = [str(c).strip() for c in df_onl.columns] 
-                
+                # Đọc thẳng qua Cache RAM thay vì qua file CSV tĩnh
+                df_onl = doc_sheet_thong_minh(link_onl_master, default_tab_sheet, ['theo ngày', 'tổng doanh thu'], st.session_state.get("refresh_onl", 0))
+                df_onl.columns = [str(c).strip() for c in df_onl.columns]
                 cols_onl = ["Không chọn"] + df_onl.columns.tolist()
                 
-                idx_ngay = cols_onl.index("Theo Ngày") if "Theo Ngày" in cols_onl else 0
-                idx_doanhthu = cols_onl.index("Tổng Doanh Thu") if "Tổng Doanh Thu" in cols_onl else 0
+                idx_ngay = next((i for i, c in enumerate(cols_onl) if 'theo ngày' in str(c).lower()), 0)
+                if idx_ngay == 0: idx_ngay = next((i for i, c in enumerate(cols_onl) if 'ngày' in str(c).lower() or 'date' in str(c).lower()), 0)
                 
+                idx_doanhthu = next((i for i, c in enumerate(cols_onl) if 'tổng doanh thu' in str(c).lower()), 0)
+                if idx_doanhthu == 0: idx_doanhthu = next((i for i, c in enumerate(cols_onl) if 'doanh thu' in str(c).lower() or 'tổng tiền' in str(c).lower()), 0)
+
                 c1_onl, c2_onl = st.columns(2)
                 with c1_onl: cot_ngay_onl = st.selectbox("Cột Ngày:", options=cols_onl, index=idx_ngay, key=f"colngay_{prefix_key}")
                 with c2_onl: cot_dt_onl = st.selectbox("Cột Doanh Thu:", options=cols_onl, index=idx_doanhthu, key=f"coldt_{prefix_key}")
                 
                 if cot_ngay_onl != "Không chọn" and cot_dt_onl != "Không chọn":
                     df_onl['Ngay_Chuan'] = clean_date_robust(df_onl[cot_ngay_onl])
-                    
-                    start_ts = pd.to_datetime(start_date)
-                    end_ts = pd.to_datetime(end_date)
-                    
-                    df_onl_ngay = df_onl[(df_onl['Ngay_Chuan'] >= start_ts) & (df_onl['Ngay_Chuan'] <= end_ts)].copy()
-                    
+                    df_onl_ngay = df_onl[(df_onl['Ngay_Chuan'] >= pd.to_datetime(start_date)) & (df_onl['Ngay_Chuan'] <= pd.to_datetime(end_date))]
                     if not df_onl_ngay.empty:
-                        df_onl_ngay[cot_dt_onl] = df_onl_ngay[cot_dt_onl].apply(clean_money)
-                        dt_online_tong = int(df_onl_ngay[cot_dt_onl].sum())
-                        st.success(f"✅ Hệ thống tự động tìm thấy: **{dt_online_tong:,} đ**")
-                        dt_online = dt_online_tong
+                        dt_online = int(df_onl_ngay[cot_dt_onl].apply(clean_money).sum())
+                        st.success(f"✅ Hệ thống tự động tính tổng: **{dt_online:,} đ**")
                     else:
-                        st.info("Không có đơn Online trong ngày này.")
-            except Exception as e:
-                st.error(f"❌ Lỗi đọc dữ liệu cục bộ.")
+                        st.info("Không có đơn Online trong khoảng thời gian này.")
+            except Exception:
+                st.error("Lỗi đọc dữ liệu Doanh thu Online.")
         else:
-            st.warning("⚠️ Chưa có dữ liệu Online. Vui lòng bấm 'LƯU & CẬP NHẬT ĐỒNG LOẠT' ở menu bên trái.")
-            
-        dt_online_input = st.number_input("Chỉnh sửa Doanh thu Online (Nếu cần):", min_value=0, value=int(dt_online), step=10000, key=f"dtonl_edit_{dk}_{int(dt_online)}")
+            st.warning("Chưa có dữ liệu Online. Bấm 'LƯU & CẬP NHẬT ĐỒNG LOẠT' ở menu trái.")
+
+        dt_online_input = st.number_input("Chỉnh sửa Doanh thu Online:", min_value=0, value=int(dt_online), step=10000, key=f"dtonl_edit_{dk}")
 
     tong_dt_hien_tai = dt_offline + dt_online_input
-    st.write("")
-    st.markdown(f"##### 🌟 TỔNG CỘNG DOANH THU: <span style='color:#C4A484;'>{tong_dt_hien_tai:,} VNĐ</span>", unsafe_allow_html=True)
+    st.write(f"##### 🌟 TỔNG CỘNG DOANH THU: <span style='color:#C4A484;'>{tong_dt_hien_tai:,} VNĐ</span>", unsafe_allow_html=True)
     
     st.write("---")
     st.write(f"#### 2. Dữ Liệu Kho {chuoi_hien_thi}")
-    if ton_dau_auto > 0 or ton_cuoi_auto > 0:
-        st.success(f"🤖 Đã tự động điền Tồn Đầu (ngày {start_date.strftime('%d/%m')}) và Tồn Cuối (ngày {(end_date + datetime.timedelta(days=1)).strftime('%d/%m')}) của CN {cn_doisoat} từ Tab 1.")
-    else:
-        st.caption("*(Chưa tìm thấy dữ liệu tự động, anh có thể tải dữ liệu lên Tab 1 hoặc tự nhập tay)*")
+    if ton_dau_auto > 0 or ton_cuoi_auto > 0 or nhap_hang_auto > 0:
+        st.success(f"🤖 Hệ thống đã điền tự động dữ liệu từ Tab 1 (Kho & Nhập Nguyên Liệu).")
         
     col_k1, col_k2, col_k3 = st.columns(3)
     with col_k1:
         ton_dau = st.number_input("📦 Tồn Đầu (VNĐ)", min_value=0, value=int(ton_dau_auto), step=100000, key=f"td_{dk}")
     with col_k2:
-        nhap_trong_ngay = st.number_input("🛒 Nhập Hàng (VNĐ)", min_value=0, value=0, step=100000, key=f"nhap_{dk}")
+        nhap_trong_ngay = st.number_input("🛒 Nhập Hàng (VNĐ)", min_value=0, value=int(nhap_hang_auto), step=100000, key=f"nhap_{dk}")
     with col_k3:
         ton_cuoi = st.number_input("📉 Tồn Cuối (VNĐ)", min_value=0, value=int(ton_cuoi_auto), step=100000, key=f"tc_{dk}")
 
     if st.button(f"🧮 Báo Cáo % Nguyên Liệu {chuoi_hien_thi}", key=f"btn_bc_{prefix_key}"):
-        tong_doanh_thu = dt_offline + dt_online_input
+        tong_doanh_thu = tong_dt_hien_tai
         chi_phi_nl = ton_dau + nhap_trong_ngay - ton_cuoi
         
         st.write("---")
@@ -742,7 +704,6 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
             st.error("❌ Số liệu kho đang bị âm (Tồn cuối lớn hơn tổng Tồn đầu + Nhập).")
         else:
             phan_tram_nl = (chi_phi_nl / tong_doanh_thu) * 100
-            
             c1, c2, c3 = st.columns(3)
             c1.metric("💰 Doanh Thu Thực Tế", f"{tong_doanh_thu:,} đ")
             c2.metric("🔪 Chi Phí Nguyên Liệu", f"{chi_phi_nl:,} đ")
