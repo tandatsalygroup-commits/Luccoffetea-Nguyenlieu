@@ -75,6 +75,10 @@ def clean_date_robust(date_series):
         cleaned.loc[mask_na] = pd.to_datetime(ds_str.loc[mask_na], errors='coerce', dayfirst=True)
     return cleaned.dt.normalize()
 
+def clean_ipos_date(date_series):
+    """Hàm chuyên dụng xử lý ngày tháng lộn xộn từ iPOS"""
+    return pd.to_datetime(date_series, errors='coerce', dayfirst=True).dt.normalize()
+
 def process_dataframe_header(df_raw, tu_khoa_nhan_dien=[]):
     header_idx = 0
     if tu_khoa_nhan_dien:
@@ -400,15 +404,13 @@ with tab2:
             
             col_sl = next((c for c in df_ban.columns if 'số lượng' in str(c).lower()), 'Số lượng')
             
-            # --- CẢI TIẾN TÌM CỘT TỔNG TIỀN ---
-            # Ưu tiên tìm chính xác cột "Tổng tiền" (không có VAT hay chiết khấu) từ dưới lên
             col_tt = None
             cols_reversed = reversed(df_ban.columns.tolist())
             for c in cols_reversed:
                 if str(c).strip().lower() == 'tổng tiền':
                     col_tt = c
                     break
-            if not col_tt: # Fallback nếu không có cột nào tên y xì
+            if not col_tt: 
                 col_tt = next((c for c in reversed(df_ban.columns.tolist()) if 'tổng tiền' in str(c).lower() or 'doanh thu' in str(c).lower()), 'Tổng tiền')
             
             if col_sl in df_ban.columns: df_ban['Số lượng'] = pd.to_numeric(df_ban[col_sl], errors='coerce').fillna(0)
@@ -419,7 +421,8 @@ with tab2:
                 
                 time_col_master = next((c for c in df_ban.columns if 'thời gian' in str(c).lower() or 'ngày' in str(c).lower()), None)
                 if time_col_master:
-                    df_ban['Date_Obj'] = clean_date_robust(df_ban[time_col_master]).dt.date
+                    # SỬ DỤNG HÀM ÉP NGÀY CHUYÊN DỤNG CHO IPOS
+                    df_ban['Date_Obj'] = clean_ipos_date(df_ban[time_col_master])
                     df_ban['Ngày_Chuan_Str'] = pd.to_datetime(df_ban['Date_Obj']).dt.strftime('%d/%m/%Y')
                          
                     df_daily_multi = df_ban.groupby(['Chi Nhánh Hệ Thống', 'Ngày_Chuan_Str'])['Tổng tiền_Clean'].sum().reset_index()
@@ -548,7 +551,7 @@ with tab3:
             st.rerun()
 
 # ==========================================
-# HÀM LÕI KÉO DỮ LIỆU FOOD COST
+# HÀM LÕI KÉO DỮ LIỆU FOOD COST 
 # ==========================================
 def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
     st.markdown(f"### 🧮 Quản Trị Tỷ Lệ % Nguyên Liệu (Food Cost) - {cn_mac_dinh}")
@@ -632,7 +635,7 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
 
     with col_dt2:
         st.write("**🛵 Doanh thu Online (ShopeeFood, Grab...)**")
-        st.caption("*(Dữ liệu được lấy cục bộ từ việc Cập nhật Đồng loạt ở Sidebar)*")
+        st.caption("*(Dữ liệu tự động đồng bộ từ file gốc ở Sidebar)*")
             
         dt_online = 0
         file_onl = f"temp_onl_{cn_mac_dinh}.csv"
