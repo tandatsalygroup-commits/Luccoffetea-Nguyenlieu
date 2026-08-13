@@ -51,7 +51,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# HÀM KÉO DỮ LIỆU GOOGLE SHEET VÀ LÀM SẠCH (ĐÃ SỬA LỖI NGÀY THÁNG)
+# HÀM BỌC THÉP: LÀM SẠCH VÀ QUÉT HEADER THÔNG MINH
 # ==========================================
 def clean_money(val):
     if pd.isna(val): return 0
@@ -65,35 +65,50 @@ def clean_money(val):
         return int(val_str)
 
 def clean_date_robust(date_series):
-    """Hàm bọc thép: Quét 3 tầng để tránh nhầm lẫn format ngày tháng của Google Sheet"""
-    # Xóa số ".0" dư thừa nếu format bị chuyển thành float
     ds_str = date_series.astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
-    
-    # 1. Thử ISO (YYYY-MM-DD) do Pandas lưu từ kiểu Datetime của Excel
     cleaned = pd.to_datetime(ds_str, format='%Y-%m-%d', errors='coerce')
-    
-    # 2. Thử chuẩn VN (DD/MM/YYYY) do nhập Text bằng tay
     mask_na = cleaned.isna()
     if mask_na.any():
         cleaned.loc[mask_na] = pd.to_datetime(ds_str.loc[mask_na], format='%d/%m/%Y', errors='coerce')
-        
-    # 3. Phủ lưới chót cho các định dạng lẫn lộn khác
     mask_na = cleaned.isna()
     if mask_na.any():
         cleaned.loc[mask_na] = pd.to_datetime(ds_str.loc[mask_na], errors='coerce', dayfirst=True)
-        
-    return cleaned.dt.normalize() # normalize() để xóa sạch giờ/phút, chỉ giữ lại ngày
+    return cleaned.dt.normalize()
+
+def process_dataframe_header(df_raw, tu_khoa_nhan_dien=[]):
+    """Hàm AI quét từng dòng để tìm đúng dòng Tiêu Đề, bất chấp rác ở đầu file"""
+    header_idx = 0
+    if tu_khoa_nhan_dien:
+        for i in range(min(15, len(df_raw))):
+            row_vals = [str(x).lower().strip() for x in df_raw.iloc[i].values if pd.notna(x)]
+            if any(kw.lower() in row_vals for kw in tu_khoa_nhan_dien):
+                header_idx = i
+                break
+                
+    # Gán tên cột và loại bỏ khoảng trắng thừa
+    cols = []
+    for i, val in enumerate(df_raw.iloc[header_idx]):
+        if pd.isna(val) or str(val).strip() == '':
+            cols.append(f"Unnamed_{i}")
+        else:
+            cols.append(str(val).strip())
+            
+    df_raw.columns = cols
+    df_raw = df_raw.iloc[header_idx+1:].reset_index(drop=True)
+    return df_raw
 
 @st.cache_data(ttl=600, show_spinner=False)
-def doc_du_lieu_gg_sheet(link, ten_tab, refresh_trigger=0):
+def doc_sheet_thong_minh(link, ten_tab, tu_khoa_nhan_dien=[], refresh_trigger=0):
     file_id = re.search(r'/d/([a-zA-Z0-9-_]+)', link).group(1)
     xlsx_url = f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=xlsx"
-    return pd.read_excel(xlsx_url, sheet_name=ten_tab)
+    # Đọc thô không lấy header để tự quét
+    df_raw = pd.read_excel(xlsx_url, sheet_name=ten_tab, header=None)
+    return process_dataframe_header(df_raw, tu_khoa_nhan_dien)
 
 danh_sach_cn_he_thong = ["Trường Sa", "Lê Quang Định", "Trần Huy Liệu"]
 
 # ==========================================
-# THANH SIDEBAR TỰ ĐỘNG ĐỒNG BỘ 3 CHI NHÁNH
+# THANH SIDEBAR TỰ ĐỘNG ĐỒNG BỘ ONLINE CẢ 3 CHI NHÁNH
 # ==========================================
 st.sidebar.markdown("### ⚙️ CẤU HÌNH ĐỐI SOÁT ONLINE")
 st.sidebar.info("Thiết lập Link 1 lần duy nhất ở đây. Bấm nút dưới để hệ thống kéo toàn bộ dữ liệu về chạy cục bộ siêu tốc.")
@@ -111,21 +126,11 @@ if st.sidebar.button("🚀 LƯU & CẬP NHẬT ĐỒNG LOẠT", use_container_wi
             for cn_mac_dinh, def_tab in [("Trường Sa", "Lục_TS"), ("Lê Quang Định", "Lục_LQD"), ("Trần Huy Liệu", "Lục_THL")]:
                 tab_name = app_config.get("food_cost", {}).get(cn_mac_dinh, {}).get("tab", def_tab)
                 try:
-                    file_id = re.search(r'/d/([a-zA-Z0-9-_]+)', global_onl_link).group(1)
-                    xlsx_url = f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=xlsx"
-                    
-                    df_onl = pd.read_excel(xlsx_url, sheet_name=tab_name)
-                    cols_lower = [str(c).lower().strip() for c in df_onl.columns]
-                    
-                    if not any('theo ngày' in c for c in cols_lower):
-                        df_onl = pd.read_excel(xlsx_url, sheet_name=tab_name, header=1)
-                        cols_lower = [str(c).lower().strip() for c in df_onl.columns]
-                        if not any('theo ngày' in c for c in cols_lower):
-                            df_onl = pd.read_excel(xlsx_url, sheet_name=tab_name, header=2)
-                            
+                    # Dùng hàm thông minh tìm chữ 'theo ngày' hoặc 'doanh thu'
+                    df_onl = doc_sheet_thong_minh(global_onl_link, tab_name, ['theo ngày', 'doanh thu', 'tổng doanh thu'], time.time())
                     df_onl.to_csv(f"temp_onl_{cn_mac_dinh}.csv", index=False)
                 except Exception as e:
-                    st.sidebar.error(f"❌ Lỗi tải {cn_mac_dinh} (Sheet {tab_name}): Không tìm thấy hoặc link sai.")
+                    st.sidebar.error(f"❌ Lỗi tải {cn_mac_dinh} (Sheet '{tab_name}'): Không tìm thấy hoặc link sai.")
                     
         st.sidebar.success("✅ Đã lấy số xong! Các Tab hiện tại đã có dữ liệu chuẩn xác.")
         st.rerun()
@@ -179,7 +184,7 @@ with tab1:
         if link_appsheet:
             try:
                 with st.spinner("⏳ Đang kéo dữ liệu Tồn Kho từ mây..."):
-                    df_kho_goc = doc_du_lieu_gg_sheet(link_appsheet, tab_appsheet, st.session_state["refresh_kho"])
+                    df_kho_goc = doc_sheet_thong_minh(link_appsheet, tab_appsheet, [], st.session_state["refresh_kho"])
                 st.success(f"✅ Đã kết nối thành công với kho dữ liệu `{tab_appsheet}`!")
             except Exception as e:
                 st.error("❌ Không thể kết nối. Vui lòng kiểm tra lại link Google Sheet.")
@@ -194,8 +199,8 @@ with tab1:
         else:
             file_kho = st.file_uploader("Tải file Tồn Kho lên đây", type=['xlsx', 'xls', 'csv'], key="kho")
             if file_kho is not None:
-                if file_kho.name.endswith('.csv'): df_kho_goc = pd.read_csv(file_kho)
-                else: df_kho_goc = pd.read_excel(file_kho)
+                df_raw = pd.read_csv(file_kho, header=None) if file_kho.name.endswith('.csv') else pd.read_excel(file_kho, header=None)
+                df_kho_goc = process_dataframe_header(df_raw, [])
                 df_kho_goc.to_csv("temp_kho.csv", index=False)
                 st.rerun()
 
@@ -267,11 +272,7 @@ with tab1:
             
             if not df_chart.empty:
                 df_pivot = df_chart.pivot(index=cot_ngay, columns=cot_nhom, values=cot_gt).fillna(0)
-                df_pivot.index = pd.to_datetime(df_pivot.index, format='%d/%m/%Y', errors='coerce')
-                if df_pivot.index.isna().any():
-                    old_index = df_chart.pivot(index=cot_ngay, columns=cot_nhom, values=cot_gt).fillna(0).index
-                    df_pivot.index = pd.to_datetime(old_index, errors='coerce', dayfirst=True)
-                
+                df_pivot.index = clean_date_robust(pd.Series(df_pivot.index))
                 df_pivot = df_pivot.sort_index()
                 df_pivot.index = df_pivot.index.strftime('%d/%m/%Y')
                 
@@ -322,13 +323,7 @@ with tab2:
                                 if cn_upload not in st.session_state["refresh_ipos"]: st.session_state["refresh_ipos"][cn_upload] = 0
                                 st.session_state["refresh_ipos"][cn_upload] += 1
                                 
-                                df_new = doc_du_lieu_gg_sheet(link_ipos, tab_name, st.session_state["refresh_ipos"][cn_upload])
-                                
-                                if 'Tên hàng' not in df_new.columns and len(df_new) > 0:
-                                    file_id = re.search(r'/d/([a-zA-Z0-9-_]+)', link_ipos).group(1)
-                                    df_new = pd.read_excel(f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=xlsx", sheet_name=tab_name, header=1)
-                                    if 'Tên hàng' not in df_new.columns and len(df_new) > 0:
-                                        df_new = pd.read_excel(f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=xlsx", sheet_name=tab_name, header=2)
+                                df_new = doc_sheet_thong_minh(link_ipos, tab_name, ['tên hàng', 'mã hàng'], st.session_state["refresh_ipos"][cn_upload])
                                 
                                 if cn_upload == "Lê Quang Định" and "Nguồn" in df_new.columns:
                                     cac_nguon_hop_le = ['mang về', 'mang ve', 'tại chỗ', 'tại chổ', 'tai cho', 'tại cho', 'tai chỗ']
@@ -352,13 +347,8 @@ with tab2:
                 file_ipos = st.file_uploader(f"2. Tải báo cáo iPOS của {cn_upload}", type=['xlsx', 'xls', 'csv'], key="upload_ipos")
                 if file_ipos is not None:
                     try:
-                        if file_ipos.name.endswith('.csv'): df_new = pd.read_csv(file_ipos)
-                        else:
-                            df_new = pd.read_excel(file_ipos)
-                            if 'Tên hàng' not in df_new.columns and len(df_new) > 0:
-                                df_new = pd.read_excel(file_ipos, header=1)
-                                if 'Tên hàng' not in df_new.columns and len(df_new) > 0:
-                                    df_new = pd.read_excel(file_ipos, header=2)
+                        df_raw = pd.read_csv(file_ipos, header=None) if file_ipos.name.endswith('.csv') else pd.read_excel(file_ipos, header=None)
+                        df_new = process_dataframe_header(df_raw, ['tên hàng', 'mã hàng'])
                         
                         if cn_upload == "Lê Quang Định" and "Nguồn" in df_new.columns:
                             cac_nguon_hop_le = ['mang về', 'mang ve', 'tại chỗ', 'tại chổ', 'tai cho', 'tại cho', 'tai chỗ']
@@ -535,7 +525,8 @@ with tab3:
     else:
         file_menu = st.file_uploader("Tải file Menu Excel lên", type=['xlsx', 'csv'], key="menu_upload")
         if file_menu:
-            df_menu = pd.read_csv(file_menu) if file_menu.name.endswith('.csv') else pd.read_excel(file_menu)
+            df_raw = pd.read_csv(file_menu, header=None) if file_menu.name.endswith('.csv') else pd.read_excel(file_menu, header=None)
+            df_menu = process_dataframe_header(df_raw, [])
             df_menu.to_csv("menu_goc.csv", index=False, encoding='utf-8-sig')
             st.rerun()
 
