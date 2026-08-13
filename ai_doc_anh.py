@@ -54,7 +54,6 @@ st.markdown("""
 # HÀM XỬ LÝ TIỀN & NGÀY THÁNG ĐÃ SỬA DỨT ĐIỂM
 # ==========================================
 def clean_money(val):
-    """Hàm bọc thép xử lý số tiền chuẩn 100%, không bị nuốt số 000 do dấu phẩy"""
     if pd.isna(val): return 0
     if isinstance(val, (int, float)): return int(val)
     val_str = str(val).strip()
@@ -62,17 +61,13 @@ def clean_money(val):
     try:
         return int(float(val_str))
     except ValueError:
-        # Bỏ đơn vị đ, Đ và khoảng trắng
         val_str = re.sub(r'[đĐ\s]', '', val_str)
-        # Bỏ phần thập phân đuôi .00 hoặc ,00 nếu có
         val_str = re.sub(r'[\.,]00$', '', val_str)
-        # Bỏ tất cả các ký tự không phải là số
         val_str = re.sub(r'[^\d]', '', val_str)
         if not val_str: return 0
         return int(val_str)
 
 def clean_date_robust(date_series):
-    """Hàm xử lý ngày tháng chuẩn cho Online / Kho"""
     ds_str = date_series.astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
     cleaned = pd.to_datetime(ds_str, format='%Y-%m-%d', errors='coerce')
     mask_na = cleaned.isna()
@@ -84,9 +79,7 @@ def clean_date_robust(date_series):
     return cleaned.dt.normalize()
 
 def clean_ipos_date(date_series):
-    """Hàm xử lý ngày tháng chuyên dụng cho Cột M (Thời gian) trong file iPOS"""
     ds_str = date_series.astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
-    # Lấy phần ngày trước khoảng trắng giờ phút
     ds_date_part = ds_str.str.split().str[0]
     cleaned = pd.to_datetime(ds_date_part, format='%d/%m/%Y', errors='coerce')
     mask_na = cleaned.isna()
@@ -98,7 +91,6 @@ def clean_ipos_date(date_series):
     return cleaned.dt.normalize()
 
 def process_dataframe_header(df_raw, tu_khoa_nhan_dien=[]):
-    """Xử lý tiêu đề và chống trùng lặp tên cột"""
     header_idx = 0
     if tu_khoa_nhan_dien:
         for i in range(min(15, len(df_raw))):
@@ -312,7 +304,7 @@ with tab1:
             st.dataframe(df_kq_hien_thi, use_container_width=True)
 
 # ==========================================
-# TAB 2: PHÂN TÍCH BÁN HÀNG IPOS (Đã sửa thuật toán quét Cột M & AM)
+# TAB 2: PHÂN TÍCH BÁN HÀNG CHI TIẾT
 # ==========================================
 with tab2:
     st.markdown("### 📈 Phân Tích Bán Hàng iPOS (Đa Chi Nhánh)")
@@ -422,19 +414,15 @@ with tab2:
     if df_ban_goc_list:
         df_ban_master = pd.concat(df_ban_goc_list, ignore_index=True)
         
-        # 1. Tìm cột Tên hàng (Cột C)
-        col_ten_hang = next((c for c in df_ban_master.columns if str(c).strip().lower() == 'tên hàng'), None)
-        if not col_ten_hang: col_ten_hang = next((c for c in df_ban_master.columns if 'tên hàng' in str(c).lower()), None)
+        col_ten_hang = next((c for c in df_ban_master.columns if 'tên hàng' in str(c).lower()), None)
         if not col_ten_hang: col_ten_hang = next((c for c in df_ban_master.columns if 'mã hàng' in str(c).lower()), None)
         
         if col_ten_hang:
             df_ban = df_ban_master.dropna(subset=[col_ten_hang]).copy()
             df_ban = df_ban[~df_ban[col_ten_hang].astype(str).str.strip().isin(['-', 'Tổng cộng'])]
             
-            # 2. Tìm cột Số lượng (Cột O)
             col_sl = next((c for c in df_ban.columns if 'số lượng' in str(c).lower()), 'Số lượng')
             
-            # 3. Tìm chính xác cột Cột AM (Tổng tiền)
             col_tt = None
             if len(df_ban.columns) > 38 and 'tiền' in str(df_ban.columns[38]).lower():
                 col_tt = df_ban.columns[38]
@@ -446,7 +434,6 @@ with tab2:
             if not col_tt:
                 col_tt = next((c for c in reversed(df_ban.columns.tolist()) if 'tổng tiền' in str(c).lower() or 'doanh thu' in str(c).lower()), 'Tổng tiền')
             
-            # 4. Tìm Cột M (Thời gian)
             time_col_master = None
             if len(df_ban.columns) > 12 and ('thời gian' in str(df_ban.columns[12]).lower() or 'ngày' in str(df_ban.columns[12]).lower()):
                 time_col_master = df_ban.columns[12]
@@ -457,7 +444,6 @@ with tab2:
             if col_tt in df_ban.columns: df_ban['Tổng tiền_Clean'] = df_ban[col_tt].apply(clean_money)
             
             if 'Tổng tiền_Clean' in df_ban.columns and time_col_master:
-                # Ép ngày iPOS bằng hàm chuyên dụng clean_ipos_date
                 df_ban['Date_Obj'] = clean_ipos_date(df_ban[time_col_master])
                 df_ban = df_ban[df_ban['Date_Obj'].notna()]
                 
@@ -469,7 +455,6 @@ with tab2:
                     dict_doanh_thu[cn] = df_daily_multi[df_daily_multi['Chi Nhánh Hệ Thống'] == cn].set_index('Ngày_Chuan_Str')['Tổng tiền_Clean'].to_dict()
                 st.session_state['nhat_ky_doanh_thu_offline_multi'] = dict_doanh_thu
 
-        # --- BỘ LỌC CHI NHÁNH & KHUNG THỜI GIAN TOÀN DIỆN CHO TAB 2 ---
         st.write("---")
         st.write("### 🎛️ BỘ LỌC PHÂN TÍCH IPOS")
         col_f_ipos1, col_f_ipos2 = st.columns(2)
@@ -483,7 +468,9 @@ with tab2:
                 min_date_ipos = df_ban['Date_Obj'].dropna().min()
                 max_date_ipos = df_ban['Date_Obj'].dropna().max()
                 if pd.notnull(min_date_ipos) and pd.notnull(max_date_ipos):
-                    ngay_loc_ipos = st.date_input("🗓️ Lọc khoảng thời gian phân tích:", value=(min_date_ipos, max_date_ipos), min_value=min_date_ipos, max_value=max_date_ipos, key="date_range_ipos_master")
+                    min_d_ipos = min_date_ipos.date()
+                    max_d_ipos = max_date_ipos.date()
+                    ngay_loc_ipos = st.date_input("🗓️ Lọc khoảng thời gian phân tích:", value=(min_d_ipos, max_d_ipos), min_value=min_d_ipos, max_value=max_d_ipos, key="date_range_ipos_master")
                     if isinstance(ngay_loc_ipos, tuple):
                         start_d_ipos = ngay_loc_ipos[0]
                         end_d_ipos = ngay_loc_ipos[1] if len(ngay_loc_ipos) > 1 else start_d_ipos
@@ -493,9 +480,10 @@ with tab2:
         if 'df_ban' in locals() and cn_chon_ipos and col_ten_hang:
             df_ban_view = df_ban[df_ban['Chi Nhánh Hệ Thống'].isin(cn_chon_ipos)].copy()
             
-            # Áp dụng bộ lọc khung thời gian nếu người dùng chọn
             if start_d_ipos and end_d_ipos and 'Date_Obj' in df_ban_view.columns:
-                df_ban_view = df_ban_view[(df_ban_view['Date_Obj'] >= start_d_ipos) & (df_ban_view['Date_Obj'] <= end_d_ipos)]
+                start_ts_ipos = pd.to_datetime(start_d_ipos)
+                end_ts_ipos = pd.to_datetime(end_d_ipos)
+                df_ban_view = df_ban_view[(df_ban_view['Date_Obj'] >= start_ts_ipos) & (df_ban_view['Date_Obj'] <= end_ts_ipos)]
             
             def extract_size(name):
                 match = re.search(r'\((S|M|L)\)$', str(name).strip(), re.IGNORECASE)
@@ -678,7 +666,7 @@ def render_food_cost_tab(cn_mac_dinh, prefix_key, default_tab_sheet):
 
     with col_dt2:
         st.write("**🛵 Doanh thu Online (ShopeeFood, Grab...)**")
-        st.caption("*(Dữ liệu được lấy cục bộ từ việc Cập nhật Đồng loạt ở Sidebar)*")
+        st.caption("*(Dữ liệu tự động đồng bộ từ file gốc ở Sidebar)*")
             
         dt_online = 0
         file_onl = f"temp_onl_{cn_mac_dinh}.csv"
