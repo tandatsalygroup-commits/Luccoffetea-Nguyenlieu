@@ -54,18 +54,23 @@ st.markdown("""
 # HÀM XỬ LÝ TIỀN & NGÀY THÁNG ĐÃ SỬA DỨT ĐIỂM
 # ==========================================
 def clean_money(val):
+    """Hàm bọc thép dọn dẹp số tiền, chống lỗi dư 2 số 0 của định dạng thập phân"""
     if pd.isna(val): return 0
     if isinstance(val, (int, float)): return int(val)
     val_str = str(val).strip()
     if not val_str or val_str in ['-', 'nan', '##########']: return 0
-    try:
-        return int(float(val_str))
-    except ValueError:
-        val_str = re.sub(r'[đĐ\s]', '', val_str)
-        val_str = re.sub(r'[\.,]00$', '', val_str)
-        val_str = re.sub(r'[^\d]', '', val_str)
-        if not val_str: return 0
-        return int(val_str)
+    
+    # 1. Giữ lại CHỈ số, dấu chấm, dấu phẩy và dấu âm. Xóa sạch mọi chữ cái (VNĐ, đ, VND...)
+    val_str = re.sub(r'[^\d\.,\-]', '', val_str)
+    
+    # 2. Xóa phần thập phân (1-2 chữ số theo sau dấu chấm/phẩy nằm ở cuối cùng của chuỗi)
+    val_str = re.sub(r'[\.,]\d{1,2}$', '', val_str)
+    
+    # 3. Xóa mọi dấu phân cách hàng nghìn, giữ lại đúng số tinh khiết và dấu âm
+    val_str = re.sub(r'[^\d\-]', '', val_str)
+    
+    if not val_str or val_str == '-': return 0
+    return int(val_str)
 
 def clean_date_robust(date_series):
     ds_str = date_series.astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
